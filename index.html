@@ -166,6 +166,19 @@
       </div>
     </div>
 
+    <!-- Suggestions -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">Conseils d'entraînement</div>
+      </div>
+      <div id="dashboard-suggestions">
+        <div class="empty-state" style="padding:var(--space-md); text-align:center;">
+          <div class="empty-icon"><i data-lucide="lightbulb"></i></div>
+          <div class="empty-desc">Faites quelques séances pour obtenir des conseils !</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Recent Sessions -->
     <div class="section">
       <div class="section-header">
@@ -404,6 +417,7 @@
     <div class="section">
       <div class="section-header">
         <div class="section-title" id="history-list-title">Toutes les séances</div>
+        <button class="btn btn-secondary btn-sm" onclick="startPastSessionFromHistory()">+ Ajouter</button>
       </div>
       <div id="history-sessions-list"></div>
     </div>

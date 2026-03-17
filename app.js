@@ -161,6 +161,120 @@ function renderDashboard() {
   } else {
     el.innerHTML = recent.map(s => sessionHistoryCard(s)).join('');
   }
+
+  // Render Exercise Suggestions
+  renderExerciseSuggestions(allSets, sessions);
+}
+
+function renderExerciseSuggestions(allSets, sessions) {
+  const container = document.getElementById('dashboard-suggestions');
+  if (!container) return;
+
+  const exercises = DB.getExercises();
+  const finishedSessions = sessions.filter(s => s.finished && (s.sport === 'muscle' || s.sport === 'bodyweight'));
+  
+  if (!finishedSessions.length || !allSets.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:var(--space-md); text-align:center;">
+      <div class="empty-icon"><i data-lucide="lightbulb" style="width:24px; color:var(--text-muted);"></i></div>
+      <div class="empty-desc" style="font-size:13px; margin-top:8px;">Faites quelques séances pour obtenir des conseils !</div>
+    </div>`;
+    return;
+  }
+
+  // 1. Group sets by exercise and compute their last performed date and a performance metric
+  const exStats = {};
+  allSets.forEach(set => {
+    const sess = finishedSessions.find(s => s.id === set.sessionId);
+    if (!sess) return;
+    const date = new Date(sess.date);
+    const orm = calc1RM(set.weight, set.reps);
+    
+    if (!exStats[set.exerciseId]) {
+      exStats[set.exerciseId] = { id: set.exerciseId, logs: [] };
+    }
+    exStats[set.exerciseId].logs.push({ date, orm });
+  });
+
+  const candidates = [];
+  const now = new Date();
+
+  Object.values(exStats).forEach(stat => {
+    // sort logs by date
+    stat.logs.sort((a, b) => a.date - b.date);
+    const lastLog = stat.logs[stat.logs.length - 1];
+    const daysSince = (now - lastLog.date) / (1000 * 3600 * 24);
+    
+    // Check if performance dropped recently (compare max of last session to max of session before)
+    let dropped = false;
+    if (stat.logs.length > 2) {
+      const dates = [...new Set(stat.logs.map(l => l.date.toISOString()))].sort();
+      if (dates.length >= 2) {
+        const lastDateLogs = stat.logs.filter(l => l.date.toISOString() === dates[dates.length - 1]);
+        const prevDateLogs = stat.logs.filter(l => l.date.toISOString() === dates[dates.length - 2]);
+        const maxLast = Math.max(...lastDateLogs.map(l => l.orm));
+        const maxPrev = Math.max(...prevDateLogs.map(l => l.orm));
+        if (maxLast < maxPrev * 0.95) dropped = true; // 5% drop
+      }
+    }
+
+    candidates.push({
+      id: stat.id,
+      daysSince,
+      dropped
+    });
+  });
+
+  // 2. Select 2 exercises to suggest
+  const suggestions = [];
+  
+  // Rule A: Needs improvement (dropped performance)
+  const toImprove = candidates.filter(c => c.dropped).sort((a, b) => b.daysSince - a.daysSince)[0];
+  if (toImprove) suggestions.push({ type: 'improve', exId: toImprove.id, reason: 'À améliorer' });
+
+  // Rule B: Hasn't been done in a while (Longest daysSince, min 5 days)
+  const availableForB = candidates.filter(c => c.daysSince > 5 && c.id !== (toImprove ? toImprove.id : null));
+  if (availableForB.length) {
+    availableForB.sort((a, b) => b.daysSince - a.daysSince);
+    suggestions.push({ type: 'repeat', exId: availableForB[0].id, reason: `Pas fait depuis ${Math.floor(availableForB[0].daysSince)} jours` });
+  }
+
+  // Fallback Rule C: Just random from the least recently done if we still need more
+  if (suggestions.length < 2) {
+    const remain = candidates
+      .filter(c => !suggestions.find(s => s.exId === c.id))
+      .sort((a, b) => b.daysSince - a.daysSince);
+    if (remain.length) {
+      suggestions.push({ type: 'suggested', exId: remain[0].id, reason: `Entretien régulier` });
+    }
+  }
+
+  if (!suggestions.length) {
+    container.innerHTML = `<div style="font-size:13px; color:var(--text-muted); text-align:center; padding:12px;">Continuez comme ça !</div>`;
+    return;
+  }
+
+  // 3. Render
+  container.innerHTML = `<div style="display:flex; flex-direction:column; gap:8px;">` + 
+    suggestions.map(s => {
+      const ex = DB.getExerciseById(s.exId);
+      if (!ex) return '';
+      const icon = s.type === 'improve' ? '<i data-lucide="trending-down" style="color:var(--warning); width:18px;"></i>' : 
+                   s.type === 'repeat' ? '<i data-lucide="clock" style="color:var(--accent-light); width:18px;"></i>' : 
+                   '<i data-lucide="check-circle" style="color:var(--success); width:18px;"></i>';
+      
+      return `
+        <div class="card" style="padding:12px; display:flex; align-items:center; gap:12px; border-left:3px solid ${s.type === 'improve' ? 'var(--warning)' : s.type === 'repeat' ? 'var(--accent)' : 'var(--border)'};">
+          <div style="display:flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:8px; background:var(--bg-elevated);">
+            ${icon}
+          </div>
+          <div style="flex:1;">
+            <div style="font-weight:700; font-size:14px; color:var(--text-white);">${ex.name}</div>
+            <div style="font-size:12px; color:var(--text-secondary);">${s.reason}</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="startQuickSession('muscle')" style="padding:4px 8px; font-size:12px;">Go</button>
+        </div>
+      `;
+    }).join('') + `</div>`;
 }
 
 function sessionHistoryCard(s) {
@@ -689,6 +803,23 @@ function renderHistory() {
   calSelectedDay = null;
   renderCalendar();
   renderHistoryList(null);
+}
+
+function startPastSessionFromHistory() {
+  navigate('session');
+  setSessionMode('past');
+
+  // If a specific day was selected in the calendar, pre-fill it
+  const dateInput = document.getElementById('past-session-date');
+  if (calSelectedDay && dateInput) {
+    const y = calCurrentDate.getFullYear();
+    const m = calCurrentDate.getMonth();
+    // Default to 12:00 PM for typical entry
+    const localDate = new Date(y, m, calSelectedDay, 12, 0, 0);
+    // Adjust to ISO format string 'YYYY-MM-DDThh:mm'
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    dateInput.value = localDate.toISOString().slice(0, 16);
+  }
 }
 
 function calNav(delta) {
