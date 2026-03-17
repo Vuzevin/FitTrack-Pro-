@@ -267,6 +267,7 @@ const DEFAULT_MACHINES = [
   { id: 'm14', name: 'Crunch / Ab machine', muscleGroups: ['Abdominaux'], category: 'Abdos' },
   { id: 'm15', name: 'Cable cross-over', muscleGroups: ['Pectoraux', 'Épaules'], category: 'Poitrine' },
   { id: 'm16', name: 'Haltères (polyvalent)', muscleGroups: ['Global'], category: 'Polyvalent' },
+  { id: 'm17', name: 'Poids du corps / Tapis', muscleGroups: ['Global'], category: 'Poids du corps' },
 ];
 
 const DEFAULT_EXERCISES = [
@@ -288,4 +289,9 @@ const DEFAULT_EXERCISES = [
   { id: 'e16', name: 'Soulevé de terre', machineId: 'm16', category: 'Dos' },
   { id: 'e17', name: 'Hip thrust', machineId: 'm16', category: 'Fessiers' },
   { id: 'e18', name: 'Fentes', machineId: 'm16', category: 'Jambes' },
+  { id: 'e19', name: 'Pompes', machineId: 'm17', category: 'Poids du corps' },
+  { id: 'e20', name: 'Dips', machineId: 'm17', category: 'Poids du corps' },
+  { id: 'e21', name: 'Gainage (Planche)', machineId: 'm17', category: 'Poids du corps' },
+  { id: 'e22', name: 'Squat au pdc', machineId: 'm17', category: 'Poids du corps' },
+  { id: 'e23', name: 'Burpees', machineId: 'm17', category: 'Poids du corps' },
 ];

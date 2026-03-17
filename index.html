@@ -151,6 +151,10 @@
           <div class="sport-icon"><i data-lucide="dumbbell"></i></div>
           <div class="sport-name">Musculation</div>
         </div>
+        <div class="sport-card" onclick="startQuickSession('bodyweight')" id="qs-bodyweight">
+          <div class="sport-icon"><i data-lucide="person-standing"></i></div>
+          <div class="sport-name">Poids du corps</div>
+        </div>
         <div class="sport-card" onclick="startQuickSession('run')" id="qs-run">
           <div class="sport-icon"><i data-lucide="activity"></i></div>
           <div class="sport-name">Course</div>
@@ -186,13 +190,39 @@
     <div id="session-selector" class="">
       <div class="page-header">
         <div class="page-title">Nouvelle séance</div>
-        <div class="page-subtitle">Choisissez votre sport</div>
+        <div class="page-subtitle">Choisissez votre sport et le moment</div>
+      </div>
+      
+      <!-- Session Mode (Live vs Past) -->
+      <div class="section" style="padding-top:var(--space-md);">
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--space-sm); display:flex; gap:var(--space-sm);">
+          <button class="btn btn-full" id="btn-mode-live" onclick="setSessionMode('live')" style="flex:1; background:var(--bg-elevated); color:var(--text-white);">Actuelle (Chrono)</button>
+          <button class="btn btn-full btn-ghost" id="btn-mode-past" onclick="setSessionMode('past')" style="flex:1;">Passée (Saisie)</button>
+        </div>
+        
+        <!-- Past Session Inputs -->
+        <div id="past-session-inputs" class="hidden mt-md" style="background:var(--bg-card); padding:var(--space-md); border-radius:var(--radius-md); border:1px solid var(--border);">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-sm);">
+            <div class="form-field mb-sm">
+              <label class="label">Date & Heure</label>
+              <input type="datetime-local" class="input" id="past-session-date" />
+            </div>
+            <div class="form-field mb-sm">
+              <label class="label">Durée totale (min)</label>
+              <input type="number" min="1" class="input" id="past-session-duration" placeholder="Ex: 45" />
+            </div>
+          </div>
+        </div>
       </div>
       <div class="section" style="padding-top:var(--space-sm);">
-        <div class="sport-grid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="sport-grid" style="grid-template-columns:1fr 1fr;">
           <div class="sport-card" onclick="selectSport('muscle')" id="sp-muscle">
             <div class="sport-icon"><i data-lucide="dumbbell"></i></div>
             <div class="sport-name">Musculation</div>
+          </div>
+          <div class="sport-card" onclick="selectSport('bodyweight')" id="sp-bodyweight">
+            <div class="sport-icon"><i data-lucide="person-standing"></i></div>
+            <div class="sport-name">Poids du corps</div>
           </div>
           <div class="sport-card" onclick="selectSport('run')" id="sp-run">
             <div class="sport-icon"><i data-lucide="activity"></i></div>

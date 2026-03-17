@@ -16,6 +16,7 @@
   --sport-muscle:   #7c3aed;
   --sport-run:      #10b981;
   --sport-cycle:    #f59e0b;
+  --sport-bodyweight: #3b82f6;
 
   --success:        #34d399;
   --warning:        #fbbf24;
@@ -382,6 +383,7 @@ body {
 .badge-muscle { background: rgba(124,58,237,0.2); color: var(--sport-muscle); }
 .badge-run    { background: rgba(16,185,129,0.2); color: var(--sport-run); }
 .badge-cycle  { background: rgba(245,158,11,0.2); color: var(--sport-cycle); }
+.badge-bodyweight { background: rgba(59,130,246,0.2); color: var(--sport-bodyweight); }
 .badge-pr     { background: rgba(251,191,36,0.2); color: var(--warning); }
 .badge-success { background: rgba(52,211,153,0.2); color: var(--success); }
 
@@ -884,6 +886,7 @@ body {
 .sport-card.selected-muscle { border-color: var(--sport-muscle); background: rgba(124,58,237,0.12); }
 .sport-card.selected-run    { border-color: var(--sport-run);    background: rgba(16,185,129,0.12); }
 .sport-card.selected-cycle  { border-color: var(--sport-cycle);  background: rgba(245,158,11,0.12); }
+.sport-card.selected-bodyweight { border-color: var(--sport-bodyweight); background: rgba(59,130,246,0.12); }
 
 .sport-icon { font-size: 36px; }
 .sport-name {
@@ -1030,6 +1033,7 @@ body {
 .icon-muscle { background: rgba(124,58,237,0.2); }
 .icon-run    { background: rgba(16,185,129,0.2); }
 .icon-cycle  { background: rgba(245,158,11,0.2); }
+.icon-bodyweight { background: rgba(59,130,246,0.2); }
 
 .history-info { flex: 1; }
 .history-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }

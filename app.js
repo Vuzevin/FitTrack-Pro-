@@ -19,7 +19,9 @@ let calSelectedDay = null;
 let selectedDetailSessionId = null;
 let restTimerInterval = null;
 let restRemaining = 0;
+let restRemaining = 0;
 let restTotal = 0;
+let isPastSessionMode = false;
 
 // Chart instances (to destroy before re-draw)
 const charts = {};
@@ -162,14 +164,14 @@ function renderDashboard() {
 }
 
 function sessionHistoryCard(s) {
-  const icons = { muscle: '<i data-lucide="dumbbell"></i>', run: '<i data-lucide="activity"></i>', cycle: '<i data-lucide="bike"></i>' };
-  const classes = { muscle: 'icon-muscle', run: 'icon-run', cycle: 'icon-cycle' };
-  const labels = { muscle: 'Musculation', run: 'Course à pied', cycle: 'Vélo' };
+  const icons = { muscle: '<i data-lucide="dumbbell"></i>', bodyweight: '<i data-lucide="person-standing"></i>', run: '<i data-lucide="activity"></i>', cycle: '<i data-lucide="bike"></i>' };
+  const classes = { muscle: 'icon-muscle', bodyweight: 'icon-bodyweight', run: 'icon-run', cycle: 'icon-cycle' };
+  const labels = { muscle: 'Musculation', bodyweight: 'Poids du corps', run: 'Course à pied', cycle: 'Vélo' };
   const d = new Date(s.date);
   const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
   const dur = s.duration ? formatDuration(s.duration) : '—';
   const setCount = DB.getSetsForSession(s.id).length;
-  const meta = s.sport === 'muscle'
+  const meta = (s.sport === 'muscle' || s.sport === 'bodyweight')
     ? `${setCount} séries • ${dur}`
     : `${s.distance ? s.distance + ' km • ' : ''}${dur}`;
   return `<div class="history-item" onclick="showSessionDetail('${s.id}')">
@@ -201,6 +203,7 @@ function renderSessionView() {
       banner.classList.remove('hidden');
       const labels = {
         muscle: '<i data-lucide="dumbbell" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Musculation',
+        bodyweight: '<i data-lucide="person-standing" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Poids du corps',
         run: '<i data-lucide="activity" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Course',
         cycle: '<i data-lucide="bike" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Vélo'
       };
@@ -212,17 +215,60 @@ function renderSessionView() {
   banner.classList.add('hidden');
 }
 
+function setSessionMode(mode) {
+  isPastSessionMode = (mode === 'past');
+  document.getElementById('btn-mode-live').style.background = isPastSessionMode ? 'transparent' : 'var(--bg-elevated)';
+  document.getElementById('btn-mode-live').style.color = isPastSessionMode ? 'var(--text-secondary)' : 'var(--text-white)';
+  
+  document.getElementById('btn-mode-past').style.background = isPastSessionMode ? 'var(--bg-elevated)' : 'transparent';
+  document.getElementById('btn-mode-past').style.color = isPastSessionMode ? 'var(--text-white)' : 'var(--text-secondary)';
+  
+  if (isPastSessionMode) {
+    document.getElementById('past-session-inputs').classList.remove('hidden');
+    // Set default date to now
+    const now = new Date();
+    // Format to YYYY-MM-DDThh:mm for datetime-local
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('past-session-date').value = now.toISOString().slice(0, 16);
+  } else {
+    document.getElementById('past-session-inputs').classList.add('hidden');
+  }
+}
+
 function selectSport(sport) {
+  // Check if past mode validation
+  let overrideDate = null;
+  let overrideDuration = 0;
+  
+  if (isPastSessionMode) {
+    const rawDate = document.getElementById('past-session-date').value;
+    overrideDuration = parseInt(document.getElementById('past-session-duration').value, 10);
+    
+    if (!rawDate || isNaN(overrideDuration) || overrideDuration <= 0) {
+      showToast('Veuillez entrer une date et une durée valide', 'warning');
+      return;
+    }
+    overrideDate = new Date(rawDate).toISOString();
+  }
+
   // If there's already an active unfinished session, resume it instead
-  if (activeSessionId) {
+  if (activeSessionId && !isPastSessionMode) {
     const sess = DB.getSessionById(activeSessionId);
     if (sess && !sess.finished) {
       resumeActiveSession();
       return;
     }
   }
+  
   activeSessionSport = sport;
   const session = DB.createSession(sport);
+  
+  if (isPastSessionMode) {
+    // Force date directly in DB since createSession uses 'now'
+    DB.updateSession(session.id, { date: overrideDate, isPast: true, manualDuration: overrideDuration });
+    session.date = overrideDate;
+  }
+  
   activeSessionId = session.id;
   sessionStartTime = Date.now();
   sessionElapsedMs = 0;
@@ -233,10 +279,18 @@ function selectSport(sport) {
   document.getElementById('session-muscle').classList.add('hidden');
   document.getElementById('session-cardio').classList.add('hidden');
 
-  if (sport === 'muscle') {
+  if (sport === 'muscle' || sport === 'bodyweight') {
     document.getElementById('session-muscle').classList.remove('hidden');
+    document.title = sport === 'bodyweight' ? '🏋️ Poids du corps' : '🏋️ Musculation';
+    document.querySelector('#session-muscle .page-title').innerHTML = sport === 'bodyweight' 
+      ? '<i data-lucide="person-standing" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Poids du corps'
+      : '<i data-lucide="dumbbell" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Musculation';
     document.getElementById('session-exercises-list').innerHTML = '';
     document.getElementById('log-set-panel').classList.add('hidden');
+    refreshIcons();
+    
+    // Hide timer if past session
+    document.getElementById('session-muscle-timer').style.display = isPastSessionMode ? 'none' : 'block';
   } else {
     document.getElementById('session-cardio').classList.remove('hidden');
     const icons = {
@@ -248,15 +302,28 @@ function selectSport(sport) {
     powerField.style.display = sport === 'cycle' ? 'block' : 'none';
     cardioElapsed = 0;
     cardioRunning = false;
-    document.getElementById('cardio-timer').textContent = '00:00:00';
-    document.getElementById('cardio-play-btn').innerHTML = '<i data-lucide="play" style="width:18px;margin-bottom:-4px;"></i> Démarrer';
+    
+    if (isPastSessionMode) {
+       document.getElementById('cardio-timer').textContent = formatDuration(overrideDuration * 60);
+       document.getElementById('cardio-play-btn').style.display = 'none';
+       document.querySelector('#cardio-play-btn + button').style.display = 'none'; // hide reset
+       cardioElapsed = overrideDuration * 60; // Set for save logic
+    } else {
+      document.getElementById('cardio-timer').textContent = '00:00:00';
+      document.getElementById('cardio-play-btn').style.display = 'block';
+      document.getElementById('cardio-play-btn').innerHTML = '<i data-lucide="play" style="width:18px;margin-bottom:-4px;"></i> Démarrer';
+      document.querySelector('#cardio-play-btn + button').style.display = 'block';
+    }
+    
     document.getElementById('cardio-distance').value = '';
     document.getElementById('cardio-hr').value = '';
     document.getElementById('cardio-pace').textContent = '—';
     document.getElementById('cardio-speed').textContent = '—';
   }
   // Single timer start
-  sessionTimerInterval = setInterval(updateSessionTimer, 1000);
+  if (!isPastSessionMode) {
+    sessionTimerInterval = setInterval(updateSessionTimer, 1000);
+  }
 }
 
 function resumeActiveSession() {
@@ -266,9 +333,13 @@ function resumeActiveSession() {
   document.getElementById('session-selector').style.display = 'none';
   document.getElementById('session-muscle').classList.add('hidden');
   document.getElementById('session-cardio').classList.add('hidden');
-  if (sess.sport === 'muscle') {
+  if (sess.sport === 'muscle' || sess.sport === 'bodyweight') {
     document.getElementById('session-muscle').classList.remove('hidden');
+    document.querySelector('#session-muscle .page-title').innerHTML = sess.sport === 'bodyweight' 
+      ? '<i data-lucide="person-standing" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Poids du corps'
+      : '<i data-lucide="dumbbell" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Musculation';
     renderExerciseBlocks();
+    refreshIcons();
   } else {
     document.getElementById('session-cardio').classList.remove('hidden');
   }
@@ -523,7 +594,8 @@ function addRestTime(secs) {
 // ─────────────────────────────────────────────
 function finishSession() {
   if (!activeSessionId) return;
-  const duration = Math.round(sessionElapsedMs / 1000);
+  const sess = DB.getSessionById(activeSessionId);
+  const duration = sess.isPast && sess.manualDuration ? (sess.manualDuration * 60) : Math.round(sessionElapsedMs / 1000);
   DB.updateSession(activeSessionId, { finished: true, duration });
   clearInterval(sessionTimerInterval);
   skipRestTimer();
@@ -707,8 +779,8 @@ function showSessionDetail(sessionId) {
   selectedDetailSessionId = sessionId;
   const s = DB.getSessionById(sessionId);
   if (!s) return;
-  const icons = { muscle: '<i data-lucide="dumbbell"></i>', run: '<i data-lucide="activity"></i>', cycle: '<i data-lucide="bike"></i>' };
-  const labels = { muscle: 'Musculation', run: 'Course à pied', cycle: 'Vélo' };
+  const icons = { muscle: '<i data-lucide="dumbbell"></i>', bodyweight: '<i data-lucide="person-standing"></i>', run: '<i data-lucide="activity"></i>', cycle: '<i data-lucide="bike"></i>' };
+  const labels = { muscle: 'Musculation', bodyweight: 'Poids du corps', run: 'Course à pied', cycle: 'Vélo' };
   const d = new Date(s.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const dur = s.duration ? formatDuration(s.duration) : '—';
   let bodyHtml = `<div style="text-align:center;margin-bottom:var(--space-md);">
@@ -718,7 +790,7 @@ function showSessionDetail(sessionId) {
     <div style="font-size:13px;color:var(--text-secondary);">Durée : ${dur}</div>
   </div>`;
 
-  if (s.sport === 'muscle') {
+  if (s.sport === 'muscle' || s.sport === 'bodyweight') {
     const sets = DB.getSetsForSession(sessionId);
     const vol = sets.reduce((a, s2) => a + s2.weight * s2.reps, 0);
     bodyHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:var(--space-md);">
