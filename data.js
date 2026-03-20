@@ -249,7 +249,6 @@ function calcIndiceDePerformance(exerciseId) {
   return { value: pct, label: pct >= 0 ? `+${pct}%` : `${pct}%` };
 }
 
-// ===== DEFAULT DATA =====
 const DEFAULT_MACHINES = [
   { id: 'm1', name: 'Squat / Rack', muscleGroups: ['Quadriceps', 'Fessiers', 'Ischio-jambiers'], category: 'Jambes' },
   { id: 'm2', name: 'Développé couché (Banc plat)', muscleGroups: ['Pectoraux', 'Triceps', 'Épaules'], category: 'Poitrine' },
@@ -268,6 +267,16 @@ const DEFAULT_MACHINES = [
   { id: 'm15', name: 'Cable cross-over', muscleGroups: ['Pectoraux', 'Épaules'], category: 'Poitrine' },
   { id: 'm16', name: 'Haltères (polyvalent)', muscleGroups: ['Global'], category: 'Polyvalent' },
   { id: 'm17', name: 'Poids du corps / Tapis', muscleGroups: ['Global'], category: 'Poids du corps' },
+  { id: 'm18', name: 'Hip Thrust Machine (Matrix)', muscleGroups: ['Fessiers'], category: 'Jambes' },
+  { id: 'm19', name: 'Hip Abductor (Matrix)', muscleGroups: ['Fessiers'], category: 'Jambes' },
+  { id: 'm20', name: 'Hip Adductor (Matrix)', muscleGroups: ['Adducteurs'], category: 'Jambes' },
+  { id: 'm21', name: 'Pec Fly / Rear Delt (Matrix)', muscleGroups: ['Pectoraux', 'Épaules'], category: 'Poitrine' },
+  { id: 'm22', name: 'Diverging Lat Pulldown (Matrix)', muscleGroups: ['Dorsaux', 'Biceps'], category: 'Dos' },
+  { id: 'm23', name: 'Leg Extension (Matrix)', muscleGroups: ['Quadriceps'], category: 'Jambes' },
+  { id: 'm24', name: 'Glute Trainer (Matrix)', muscleGroups: ['Fessiers'], category: 'Jambes' },
+  { id: 'm25', name: 'Hack Squat (Matrix)', muscleGroups: ['Quadriceps', 'Fessiers'], category: 'Jambes' },
+  { id: 'm26', name: 'Converging Chest Press (Matrix)', muscleGroups: ['Pectoraux', 'Triceps'], category: 'Poitrine' },
+  { id: 'm27', name: 'Converging Shoulder Press (Matrix)', muscleGroups: ['Épaules', 'Triceps'], category: 'Épaules' },
 ];
 
 const DEFAULT_EXERCISES = [
@@ -294,4 +303,15 @@ const DEFAULT_EXERCISES = [
   { id: 'e21', name: 'Gainage (Planche)', machineId: 'm17', category: 'Poids du corps' },
   { id: 'e22', name: 'Squat au pdc', machineId: 'm17', category: 'Poids du corps' },
   { id: 'e23', name: 'Burpees', machineId: 'm17', category: 'Poids du corps' },
+  { id: 'e24', name: 'Machine Hip Thrust', machineId: 'm18', category: 'Fessiers' },
+  { id: 'e25', name: 'Abduction', machineId: 'm19', category: 'Fessiers' },
+  { id: 'e26', name: 'Adduction', machineId: 'm20', category: 'Jambes' },
+  { id: 'e27', name: 'Pec Fly', machineId: 'm21', category: 'Poitrine' },
+  { id: 'e28', name: 'Rear Delt Fly', machineId: 'm21', category: 'Épaules' },
+  { id: 'e29', name: 'Tirage Verticale Divergent', machineId: 'm22', category: 'Dos' },
+  { id: 'e30', name: 'Leg Extension', machineId: 'm23', category: 'Jambes' },
+  { id: 'e31', name: 'Machine Glute Kickback', machineId: 'm24', category: 'Fessiers' },
+  { id: 'e32', name: 'Hack Squat Machine', machineId: 'm25', category: 'Jambes' },
+  { id: 'e33', name: 'Chest Press Convergent', machineId: 'm26', category: 'Poitrine' },
+  { id: 'e34', name: 'Shoulder Press Convergent', machineId: 'm27', category: 'Épaules' },
 ];

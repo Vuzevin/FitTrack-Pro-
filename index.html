@@ -7,6 +7,9 @@
   <meta name="description" content="FitTrack Pro — Votre compagnon d'entraînement multi-sport" />
   <title>FitTrack Pro</title>
   <link rel="stylesheet" href="index.css" />
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="apple-touch-icon" href="logo.png" />
+  <link rel="manifest" href="manifest.json" />
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <!-- Lucide Icons -->
@@ -318,7 +321,18 @@
                 <div class="stepper-value" id="stepper-weight" contenteditable="true" inputmode="decimal">60</div>
                 <button class="stepper-btn" onclick="stepperChange('weight',2.5)">+</button>
               </div>
-              <div class="stepper-label">Poids (kg)</div>
+              <div class="stepper-label" id="label-weight">Poids (kg)</div>
+            </div>
+          </div>
+          
+          <div id="leste-container" class="hidden" style="margin-bottom:12px;">
+            <div class="form-field">
+              <label class="label">Leste ajouté (kg) - Poids du corps pris en compte</label>
+              <div class="stepper">
+                <button class="stepper-btn" onclick="stepperChange('leste',-1)">−</button>
+                <div class="stepper-value" id="stepper-leste" contenteditable="true" inputmode="decimal">0</div>
+                <button class="stepper-btn" onclick="stepperChange('leste',1)">+</button>
+              </div>
             </div>
           </div>
 
@@ -604,8 +618,14 @@
       <div class="card">
         <div style="font-size:15px;font-weight:700;color:var(--text-white);margin-bottom:var(--space-md);">Compte & Données</div>
         <div style="display:flex;flex-direction:column;gap:var(--space-sm);">
-          <button class="btn btn-secondary btn-full" onclick="exportData()">📤 Exporter (JSON)</button>
-          <button class="btn btn-danger btn-full" onclick="handleLogout()">🚪 Se déconnecter</button>
+          <div style="display:flex; gap:12px;">
+            <button class="btn btn-secondary" style="flex:1;" onclick="exportData()">📤 Exporter JSON</button>
+            <button class="btn btn-secondary" style="flex:1;" onclick="exportDataCSV()">📤 CSV (Excel)</button>
+          </div>
+          <div id="auth-actions" class="mt-sm">
+            <button class="btn btn-danger btn-full hidden" id="btn-logout" onclick="handleLogout()">🚪 Se déconnecter</button>
+            <button class="btn btn-primary btn-full hidden" id="btn-login-trigger" onclick="showAuthOverlay()">Connexion / Inscription</button>
+          </div>
         </div>
       </div>
     </div>
@@ -663,8 +683,13 @@
   <div class="bottom-sheet">
     <div class="sheet-handle"></div>
     <div id="session-detail-content"></div>
-    <button class="btn btn-ghost btn-full mt-md" onclick="closeSessionDetail()">Fermer</button>
-    <button class="btn btn-danger btn-full mt-sm" id="session-delete-btn" onclick="deleteCurrentSession()">🗑 Supprimer cette séance</button>
+    <div id="session-detail-actions" style="margin-top:var(--space-md);display:flex;flex-direction:column;gap:8px;">
+      <button class="btn btn-primary btn-full" id="session-edit-btn" onclick="editPastSession()">✏️ Modifier cette séance</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-full" onclick="closeSessionDetail()" style="flex:1;">Fermer</button>
+        <button class="btn btn-danger btn-full" id="session-delete-btn" onclick="deleteCurrentSession()" style="flex:1;">🗑 Supprimer</button>
+      </div>
+    </div>
   </div>
 </div>
 

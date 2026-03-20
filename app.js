@@ -83,7 +83,10 @@ function renderDashboard() {
     now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   // Greeting
-  const name = profile.name || '';
+  let name = profile.name || '';
+  if (!name && window.currentUser && window.currentUser.email) {
+    name = window.currentUser.email.split('@')[0];
+  }
   const sub = document.getElementById('dashboard-subtitle');
   const hour = now.getHours();
   const greeting = hour < 12 ? 'Bonne matinée' : hour < 18 ? 'Bon après-midi' : 'Bonne soirée';
@@ -590,6 +593,16 @@ function showLogSetPanel(exerciseId) {
   document.getElementById('log-set-panel').classList.remove('hidden');
   document.getElementById('log-exercise-name').textContent = ex ? ex.name : exerciseId;
 
+  const lesteContainer = document.getElementById('leste-container');
+  const labelWeight = document.getElementById('label-weight');
+  if (activeSessionSport === 'bodyweight') {
+    if (lesteContainer) lesteContainer.classList.remove('hidden');
+    if (labelWeight) labelWeight.parentElement.style.display = 'none';
+  } else {
+    if (lesteContainer) lesteContainer.classList.add('hidden');
+    if (labelWeight) labelWeight.parentElement.style.display = 'block';
+  }
+
   // Show PR
   const pr = DB.getPRForExercise(exerciseId);
   const prBadge = document.getElementById('log-pr-badge');
@@ -642,7 +655,15 @@ function checkLivePR() {
 function logSet() {
   if (!activeExerciseId || !activeSessionId) { showToast('Sélectionnez un exercice d\'abord', 'warning'); return; }
   const reps = parseFloat(document.getElementById('stepper-reps').textContent) || 0;
-  const weight = parseFloat(document.getElementById('stepper-weight').textContent) || 0;
+  let weight = parseFloat(document.getElementById('stepper-weight').textContent) || 0;
+  
+  if (activeSessionSport === 'bodyweight') {
+    const leste = parseFloat(document.getElementById('stepper-leste').textContent) || 0;
+    const metrics = DB.getMetrics();
+    const userWeight = metrics.length ? metrics[metrics.length - 1].weight : 70;
+    weight = parseFloat((userWeight + leste).toFixed(1));
+  }
+  
   if (reps <= 0) { showToast('Entrez un nombre de répétitions', 'warning'); return; }
 
   DB.addSet(activeSessionId, activeExerciseId, reps, weight);
@@ -967,6 +988,29 @@ function deleteCurrentSession() {
   showToast('Séance supprimée', 'warning');
 }
 
+function editPastSession() {
+  if (!selectedDetailSessionId) return;
+  const s = DB.getSessionById(selectedDetailSessionId);
+  if (!s) return;
+  closeSessionDetail();
+  navigate('session');
+  setSessionMode('past');
+  
+  const manualDur = s.duration ? Math.round(s.duration / 60) : 0;
+  DB.updateSession(s.id, { isPast: true, manualDuration: manualDur });
+  
+  activeSessionId = s.id;
+  activeSessionSport = s.sport;
+  
+  const d = new Date(s.date);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  document.getElementById('past-session-date').value = d.toISOString().slice(0, 16);
+  document.getElementById('past-session-duration').value = manualDur;
+
+  resumeActiveSession();
+  showToast('Saisies en mode modification', 'info');
+}
+
 // ─────────────────────────────────────────────
 // STATS
 // ─────────────────────────────────────────────
@@ -1225,11 +1269,25 @@ function renderProfile() {
   if (p.goal) document.getElementById('profile-goal').value = p.goal;
   document.getElementById('profile-rest').value = s.restDuration || 60;
 
-  const displayName = p.name || 'Votre nom';
+  let displayName = p.name || '';
+  if (!displayName && window.currentUser && window.currentUser.email) {
+    displayName = window.currentUser.email.split('@')[0];
+  }
+  if (!displayName) displayName = 'Votre nom';
+
   document.getElementById('profile-display-name').textContent = displayName;
   const goalsMap = { force: 'Développement de la force', endurance: 'Améliorer l\'endurance', poids: 'Perte de poids', sante: 'Santé générale', masse: 'Prise de masse' };
-  document.getElementById('profile-display-goal').textContent = goalsMap[p.goal] || '—';
-  const initials = p.name ? p.name.slice(0, 2).toUpperCase() : '<i data-lucide="user"></i>';
+  document.getElementById('profile-display-goal').textContent = goalsMap[p.goal] || (window.currentUser ? 'Compte synchronisé' : 'Données locales');
+  
+  if (window.currentUser) {
+    document.getElementById('btn-logout').classList.remove('hidden');
+    document.getElementById('btn-login-trigger').classList.add('hidden');
+  } else {
+    document.getElementById('btn-logout').classList.add('hidden');
+    document.getElementById('btn-login-trigger').classList.remove('hidden');
+  }
+
+  const initials = displayName !== 'Votre nom' ? displayName.slice(0, 2).toUpperCase() : '<i data-lucide="user"></i>';
   document.getElementById('profile-avatar').innerHTML = initials;
 }
 
@@ -1255,6 +1313,39 @@ function exportData() {
   a.click();
   URL.revokeObjectURL(url);
   showToast('📤 Export téléchargé', 'success');
+}
+
+function exportDataCSV() {
+  const sessions = DB.getSessions();
+  const sets = DB.getSets();
+  const exercises = DB.getExercises();
+
+  let csvContent = "data:text/csv;charset=utf-8,";
+  csvContent += "Date,Sport,Exercice,Duree,Distance,Series,Repetitions,Poids\n";
+
+  sessions.forEach(s => {
+    const sDate = s.date.split('T')[0];
+    if (s.sport === 'run' || s.sport === 'cycle') {
+      csvContent += `${sDate},${s.sport},,${s.duration || 0},${s.distance || 0},,,\n`;
+    } else {
+      const sessionSets = sets.filter(st => st.sessionId === s.id);
+      if (sessionSets.length === 0) {
+        csvContent += `${sDate},${s.sport},,${s.duration || 0},0,,,\n`;
+      }
+      sessionSets.forEach((st, i) => {
+        const ex = exercises.find(e => e.id === st.exerciseId);
+        const exName = ex ? ex.name.replace(/,/g, '') : st.exerciseId;
+        csvContent += `${sDate},${s.sport},${exName},${s.duration || 0},0,${i + 1},${st.reps},${st.weight}\n`;
+      });
+    }
+  });
+
+  const encodedUri = encodeURI(csvContent);
+  const a = document.createElement('a');
+  a.href = encodedUri;
+  a.download = `fittrack-export-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  showToast('📤 Export CSV téléchargé', 'success');
 }
 
 function confirmReset() {
