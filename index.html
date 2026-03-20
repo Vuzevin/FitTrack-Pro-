@@ -154,10 +154,6 @@
           <div class="sport-icon"><i data-lucide="dumbbell"></i></div>
           <div class="sport-name">Musculation</div>
         </div>
-        <div class="sport-card" onclick="startQuickSession('bodyweight')" id="qs-bodyweight">
-          <div class="sport-icon"><i data-lucide="person-standing"></i></div>
-          <div class="sport-name">Poids du corps</div>
-        </div>
         <div class="sport-card" onclick="startQuickSession('run')" id="qs-run">
           <div class="sport-icon"><i data-lucide="activity"></i></div>
           <div class="sport-name">Course</div>
@@ -235,10 +231,6 @@
           <div class="sport-card" onclick="selectSport('muscle')" id="sp-muscle">
             <div class="sport-icon"><i data-lucide="dumbbell"></i></div>
             <div class="sport-name">Musculation</div>
-          </div>
-          <div class="sport-card" onclick="selectSport('bodyweight')" id="sp-bodyweight">
-            <div class="sport-icon"><i data-lucide="person-standing"></i></div>
-            <div class="sport-name">Poids du corps</div>
           </div>
           <div class="sport-card" onclick="selectSport('run')" id="sp-run">
             <div class="sport-icon"><i data-lucide="activity"></i></div>
@@ -533,9 +525,15 @@
     <div class="section">
       <div class="card">
         <div style="font-size:15px;font-weight:700;color:var(--text-white);margin-bottom:var(--space-md);">Mettre à jour</div>
-        <div class="form-field">
-          <label class="label">Prénom</label>
-          <input type="text" class="input" id="metric-name" placeholder="Votre prénom" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-sm);">
+          <div class="form-field">
+            <label class="label">Prénom</label>
+            <input type="text" class="input" id="metric-name" placeholder="Votre prénom" />
+          </div>
+          <div class="form-field">
+            <label class="label">Taille (cm)</label>
+            <input type="number" class="input" id="metric-height" placeholder="Ex: 175" oninput="previewBMI()" />
+          </div>
         </div>
         <div class="form-field">
           <label class="label">Date</label>

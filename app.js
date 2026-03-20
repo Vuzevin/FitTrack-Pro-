@@ -280,9 +280,9 @@ function renderExerciseSuggestions(allSets, sessions) {
 }
 
 function sessionHistoryCard(s) {
-  const icons = { muscle: '<i data-lucide="dumbbell"></i>', bodyweight: '<i data-lucide="person-standing"></i>', run: '<i data-lucide="activity"></i>', cycle: '<i data-lucide="bike"></i>' };
-  const classes = { muscle: 'icon-muscle', bodyweight: 'icon-bodyweight', run: 'icon-run', cycle: 'icon-cycle' };
-  const labels = { muscle: 'Musculation', bodyweight: 'Poids du corps', run: 'Course à pied', cycle: 'Vélo' };
+  const icons = { muscle: '<i data-lucide="dumbbell"></i>', bodyweight: '<i data-lucide="dumbbell"></i>', run: '<i data-lucide="activity"></i>', cycle: '<i data-lucide="bike"></i>' };
+  const classes = { muscle: 'icon-muscle', bodyweight: 'icon-muscle', run: 'icon-run', cycle: 'icon-cycle' };
+  const labels = { muscle: 'Musculation', bodyweight: 'Musculation', run: 'Course à pied', cycle: 'Vélo' };
   const d = new Date(s.date);
   const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
   const dur = s.duration ? formatDuration(s.duration) : '—';
@@ -319,7 +319,7 @@ function renderSessionView() {
       banner.classList.remove('hidden');
       const labels = {
         muscle: '<i data-lucide="dumbbell" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Musculation',
-        bodyweight: '<i data-lucide="person-standing" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Poids du corps',
+        bodyweight: '<i data-lucide="dumbbell" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Musculation',
         run: '<i data-lucide="activity" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Course',
         cycle: '<i data-lucide="bike" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Vélo'
       };
@@ -397,10 +397,8 @@ function selectSport(sport) {
 
   if (sport === 'muscle' || sport === 'bodyweight') {
     document.getElementById('session-muscle').classList.remove('hidden');
-    document.title = sport === 'bodyweight' ? '🏋️ Poids du corps' : '🏋️ Musculation';
-    document.querySelector('#session-muscle .page-title').innerHTML = sport === 'bodyweight' 
-      ? '<i data-lucide="person-standing" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Poids du corps'
-      : '<i data-lucide="dumbbell" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Musculation';
+    document.title = '🏋️ Musculation';
+    document.querySelector('#session-muscle .page-title').innerHTML = '<i data-lucide="dumbbell" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Musculation';
     document.getElementById('session-exercises-list').innerHTML = '';
     document.getElementById('log-set-panel').classList.add('hidden');
     refreshIcons();
@@ -451,9 +449,7 @@ function resumeActiveSession() {
   document.getElementById('session-cardio').classList.add('hidden');
   if (sess.sport === 'muscle' || sess.sport === 'bodyweight') {
     document.getElementById('session-muscle').classList.remove('hidden');
-    document.querySelector('#session-muscle .page-title').innerHTML = sess.sport === 'bodyweight' 
-      ? '<i data-lucide="person-standing" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Poids du corps'
-      : '<i data-lucide="dumbbell" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Musculation';
+    document.querySelector('#session-muscle .page-title').innerHTML = '<i data-lucide="dumbbell" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Musculation';
     renderExerciseBlocks();
     refreshIcons();
   } else {
@@ -594,7 +590,8 @@ function showLogSetPanel(exerciseId) {
 
   const lesteContainer = document.getElementById('leste-container');
   const labelWeight = document.getElementById('label-weight');
-  if (activeSessionSport === 'bodyweight') {
+  const isBw = ex && ex.category === 'Poids du corps';
+  if (isBw) {
     if (lesteContainer) lesteContainer.classList.remove('hidden');
     if (labelWeight) labelWeight.parentElement.style.display = 'none';
   } else {
@@ -656,7 +653,9 @@ function logSet() {
   const reps = parseFloat(document.getElementById('stepper-reps').textContent) || 0;
   let weight = parseFloat(document.getElementById('stepper-weight').textContent) || 0;
   
-  if (activeSessionSport === 'bodyweight') {
+  const ex = DB.getExerciseById(activeExerciseId);
+  const isBw = ex && ex.category === 'Poids du corps';
+  if (isBw) {
     const leste = parseFloat(document.getElementById('stepper-leste').textContent) || 0;
     const metrics = DB.getMetrics();
     const userWeight = metrics.length ? metrics[metrics.length - 1].weight : 70;
@@ -930,8 +929,8 @@ function showSessionDetail(sessionId) {
   selectedDetailSessionId = sessionId;
   const s = DB.getSessionById(sessionId);
   if (!s) return;
-  const icons = { muscle: '<i data-lucide="dumbbell"></i>', bodyweight: '<i data-lucide="person-standing"></i>', run: '<i data-lucide="activity"></i>', cycle: '<i data-lucide="bike"></i>' };
-  const labels = { muscle: 'Musculation', bodyweight: 'Poids du corps', run: 'Course à pied', cycle: 'Vélo' };
+  const icons = { muscle: '<i data-lucide="dumbbell"></i>', bodyweight: '<i data-lucide="dumbbell"></i>', run: '<i data-lucide="activity"></i>', cycle: '<i data-lucide="bike"></i>' };
+  const labels = { muscle: 'Musculation', bodyweight: 'Musculation', run: 'Course à pied', cycle: 'Vélo' };
   const d = new Date(s.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const dur = s.duration ? formatDuration(s.duration) : '—';
   let bodyHtml = `<div style="text-align:center;margin-bottom:var(--space-md);">
@@ -1183,6 +1182,11 @@ function renderHealth() {
     nameEl.value = profile.name || '';
   }
 
+  const heightEl = document.getElementById('metric-height');
+  if (heightEl && document.activeElement !== heightEl) {
+    heightEl.value = profile.height || '';
+  }
+
   if (metrics.length) {
     const last = metrics[metrics.length - 1];
     document.getElementById('current-bmi').textContent = last.bmi;
@@ -1200,8 +1204,8 @@ function renderHealth() {
 
 function previewBMI() {
   const w = parseFloat(document.getElementById('metric-weight').value);
-  const profile = DB.getProfile();
-  const h = parseFloat(profile.height);
+  const hInput = document.getElementById('metric-height');
+  const h = hInput && hInput.value ? parseFloat(hInput.value) : parseFloat(DB.getProfile().height);
   const preview = document.getElementById('metric-bmi-preview');
   if (w && h) {
     const bmi = calcBMI(w, h);
@@ -1214,16 +1218,25 @@ function previewBMI() {
 
 function saveMetric() {
   const nameInput = document.getElementById('metric-name');
-  if (nameInput) {
-    const newName = nameInput.value.trim();
-    if (newName) DB.saveProfile({ name: newName });
+  const heightInput = document.getElementById('metric-height');
+  
+  let newName = undefined;
+  let newHeight = undefined;
+  if (nameInput && nameInput.value.trim()) newName = nameInput.value.trim();
+  if (heightInput && heightInput.value.trim()) newHeight = parseFloat(heightInput.value.trim());
+
+  if (newName !== undefined || newHeight !== undefined) {
+    const changes = {};
+    if (newName !== undefined) changes.name = newName;
+    if (newHeight !== undefined) changes.height = newHeight;
+    DB.saveProfile(changes);
   }
 
   const w = parseFloat(document.getElementById('metric-weight').value);
   const date = document.getElementById('metric-date').value;
   if (!w || w < 20 || w > 400) { showToast('Poids invalide', 'error'); return; }
-  const profile = DB.getProfile();
-  const h = parseFloat(profile.height);
+  
+  const h = newHeight || parseFloat(DB.getProfile().height);
   const bmi = calcBMI(w, h);
   DB.addMetric(w, bmi, date ? new Date(date).toISOString() : undefined);
   document.getElementById('metric-weight').value = '';
