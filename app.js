@@ -19,7 +19,6 @@ let calSelectedDay = null;
 let selectedDetailSessionId = null;
 let restTimerInterval = null;
 let restRemaining = 0;
-let restRemaining = 0;
 let restTotal = 0;
 let isPastSessionMode = false;
 
