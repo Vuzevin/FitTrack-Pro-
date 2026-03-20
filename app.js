@@ -1174,9 +1174,14 @@ function renderHealth() {
   const metrics = DB.getMetrics();
   const profile = DB.getProfile();
 
-  // Set default date
+  // Set defaults
   const dateEl = document.getElementById('metric-date');
   if (!dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+  
+  const nameEl = document.getElementById('metric-name');
+  if (nameEl && document.activeElement !== nameEl) {
+    nameEl.value = profile.name || '';
+  }
 
   if (metrics.length) {
     const last = metrics[metrics.length - 1];
@@ -1208,6 +1213,12 @@ function previewBMI() {
 }
 
 function saveMetric() {
+  const nameInput = document.getElementById('metric-name');
+  if (nameInput) {
+    const newName = nameInput.value.trim();
+    if (newName) DB.saveProfile({ name: newName });
+  }
+
   const w = parseFloat(document.getElementById('metric-weight').value);
   const date = document.getElementById('metric-date').value;
   if (!w || w < 20 || w > 400) { showToast('Poids invalide', 'error'); return; }
@@ -1217,7 +1228,9 @@ function saveMetric() {
   DB.addMetric(w, bmi, date ? new Date(date).toISOString() : undefined);
   document.getElementById('metric-weight').value = '';
   renderHealth();
-  showToast('✓ Mesure enregistrée', 'success');
+  // Also refresh dashboard to update greeting
+  if (currentView === 'dashboard') renderDashboard();
+  showToast('✓ Mesure et infos enregistrées', 'success');
 }
 
 function renderMetricsList(metrics) {
@@ -1389,9 +1402,6 @@ document.getElementById('modal-session-detail').addEventListener('click', functi
 // INIT
 // ─────────────────────────────────────────────
 (function init() {
-  // Seed demo data if first run
-  const sessions = DB.getSessions();
-  if (!sessions.length) seedDemoData();
   navigate('dashboard');
 })();
 
