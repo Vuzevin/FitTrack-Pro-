@@ -117,25 +117,46 @@ function renderDashboard() {
   const vol = thisMonthSets.reduce((acc, s) => acc + s.weight * s.reps, 0);
   document.getElementById('kpi-volume').textContent = vol >= 1000 ? (vol / 1000).toFixed(1) + 'k' : Math.round(vol);
 
-  // Perf index - use most trained exercise
-  const exercises = DB.getExercises();
-  let bestPerfExId = null;
-  let maxSets = 0;
-  exercises.forEach(ex => {
-    const cnt = allSets.filter(s => s.exerciseId === ex.id).length;
-    if (cnt > maxSets) { maxSets = cnt; bestPerfExId = ex.id; }
-  });
-  if (bestPerfExId) {
-    const perf = calcIndiceDePerformance(bestPerfExId);
-    const ex = DB.getExerciseById(bestPerfExId);
-    const val = perf.value;
-    document.getElementById('kpi-perf').textContent = perf.label;
-    const perfTrendEl = document.getElementById('kpi-perf-desc');
-    perfTrendEl.textContent = ex ? ex.name : 'meilleur exercice';
-    perfTrendEl.className = 'kpi-trend ' + (val > 0 ? 'up' : val < 0 ? 'down' : 'neutral');
-  } else {
-    document.getElementById('kpi-perf').textContent = '—';
+  // Séries (mois)
+  document.getElementById('kpi-sets-month').textContent = thisMonthSets.length;
+
+  // Distance Cardio (mois)
+  const cardioThisMonth = monthSessions.filter(s => s.sport === 'run' || s.sport === 'cycle');
+  const dist = cardioThisMonth.reduce((acc, s) => acc + (s.distance || 0), 0);
+  document.getElementById('kpi-cardio-dist').textContent = dist > 0 ? dist.toFixed(1) : '0';
+
+  // Streak (jours consécutifs)
+  let streak = 0;
+  const finishedSess = sessions.filter(s => s.finished).sort((a,b) => new Date(b.date) - new Date(a.date));
+  let testDate = new Date();
+  testDate.setHours(0,0,0,0);
+  let expectsTodayOrYesterday = true;
+
+  const uniqueDates = [...new Set(finishedSess.map(s => {
+    const d = new Date(s.date);
+    d.setHours(0,0,0,0);
+    return d.getTime();
+  }))].sort((a,b) => b - a);
+
+  for (let ms of uniqueDates) {
+    if (expectsTodayOrYesterday) {
+      if (ms === testDate.getTime() || ms === testDate.getTime() - 86400000) {
+        streak++;
+        testDate = new Date(ms - 86400000); // recule d'1 jour
+        expectsTodayOrYesterday = false;
+      } else {
+        break;
+      }
+    } else {
+      if (ms === testDate.getTime()) {
+        streak++;
+        testDate = new Date(ms - 86400000);
+      } else {
+        break;
+      }
+    }
   }
+  document.getElementById('kpi-streak').textContent = streak;
 
   // Weight
   const metrics = DB.getMetrics();
@@ -478,6 +499,39 @@ function openExerciseSelector() {
 
 function closeExerciseModal() {
   document.getElementById('modal-exercise').classList.remove('open');
+  const form = document.getElementById('exercise-create-form');
+  if (form && !form.classList.contains('hidden')) {
+    toggleCustomExerciseForm(); // Reset forms
+  }
+}
+
+function toggleCustomExerciseForm() {
+  const form = document.getElementById('exercise-create-form');
+  const isHidden = form.classList.contains('hidden');
+  if (isHidden) {
+    form.classList.remove('hidden');
+    document.getElementById('exercise-list-items').style.display = 'none';
+    document.getElementById('btn-show-custom-ex').style.display = 'none';
+  } else {
+    form.classList.add('hidden');
+    document.getElementById('exercise-list-items').style.display = 'block';
+    document.getElementById('btn-show-custom-ex').style.display = 'block';
+  }
+}
+
+function submitCustomExercise() {
+  const name = document.getElementById('custom-ex-name').value.trim();
+  const cat = document.getElementById('custom-ex-cat').value;
+  if (!name) return;
+  
+  DB.addExercise(name, cat);
+  document.getElementById('custom-ex-name').value = '';
+  toggleCustomExerciseForm();
+  
+  currentExerciseCat = cat;
+  renderExerciseCategoryChips();
+  filterExercises();
+  showToast('Exercice créé', 'success');
 }
 
 function renderExerciseCategoryChips() {
@@ -585,8 +639,20 @@ function deleteSet(setId, exId) {
 // ─────────────────────────────────────────────
 function showLogSetPanel(exerciseId) {
   const ex = DB.getExerciseById(exerciseId);
+  const name = ex ? ex.name : exerciseId;
+  
+  if (isPastSessionMode) {
+    document.getElementById('log-set-panel').classList.add('hidden');
+    document.getElementById('past-table-panel').classList.remove('hidden');
+    document.getElementById('table-exercise-name').textContent = name;
+    renderTableRows(exerciseId);
+    return;
+  }
+
   document.getElementById('log-set-panel').classList.remove('hidden');
-  document.getElementById('log-exercise-name').textContent = ex ? ex.name : exerciseId;
+  const pastTablePanel = document.getElementById('past-table-panel');
+  if (pastTablePanel) pastTablePanel.classList.add('hidden');
+  document.getElementById('log-exercise-name').textContent = name;
 
   const lesteContainer = document.getElementById('leste-container');
   const labelWeight = document.getElementById('label-weight');
@@ -646,6 +712,97 @@ function checkLivePR() {
   } else {
     badge.classList.add('hidden');
   }
+}
+
+function closeTableMode() {
+  document.getElementById('past-table-panel').classList.add('hidden');
+  activeExerciseId = null;
+  renderExerciseBlocks();
+}
+
+function renderTableRows(exerciseId) {
+  const container = document.getElementById('table-rows-container');
+  const sets = DB.getSetsForSession(activeSessionId)
+                 .filter(s => s.exerciseId === exerciseId)
+                 .sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+                 
+  let html = '';
+  sets.forEach((s, idx) => {
+    html += `<div class="table-row-item" data-id="${s.id}" style="display:grid;grid-template-columns:30px 1fr 1fr 30px;gap:8px;margin-bottom:8px;align-items:center;">
+       <div style="color:var(--text-muted);text-align:center;">${idx+1}</div>
+       <input type="number" class="input table-rep" value="${s.reps}" placeholder="Reps" style="text-align:center;height:36px;padding:4px;" />
+       <input type="number" step="0.5" class="input table-weight" value="${s.weight}" placeholder="Poids" style="text-align:center;height:36px;padding:4px;" />
+       <button class="btn btn-ghost" style="padding:4px;" onclick="removeTableRow(this, '${s.id}')"><i data-lucide="x" style="width:16px;"></i></button>
+    </div>`;
+  });
+  
+  const emptyRows = sets.length > 0 ? 1 : 3;
+  for(let i = 0; i < emptyRows; i++) {
+    html += getEmptyRowHtml(sets.length + i + 1);
+  }
+  container.innerHTML = html;
+  
+  if (window.lucide) {
+    setTimeout(() => lucide.createIcons(), 10);
+  }
+}
+
+function getEmptyRowHtml(num) {
+  return `<div class="table-row-item new-row" style="display:grid;grid-template-columns:30px 1fr 1fr 30px;gap:8px;margin-bottom:8px;align-items:center;">
+    <div style="color:var(--text-muted);text-align:center;" class="row-num">${num}</div>
+    <input type="number" class="input table-rep" placeholder="Reps" style="text-align:center;height:36px;padding:4px;" />
+    <input type="number" step="0.5" class="input table-weight" placeholder="Poids" style="text-align:center;height:36px;padding:4px;" />
+    <button class="btn btn-ghost" style="padding:4px;" onclick="removeTableRow(this)"><i data-lucide="trash-2" style="width:16px;"></i></button>
+  </div>`;
+}
+
+function addTableRow() {
+  const container = document.getElementById('table-rows-container');
+  const count = container.querySelectorAll('.table-row-item').length;
+  container.insertAdjacentHTML('beforeend', getEmptyRowHtml(count + 1));
+  if (window.lucide) {
+    setTimeout(() => lucide.createIcons(), 10);
+  }
+}
+
+function removeTableRow(btn, setId) {
+  if (setId) {
+     DB.deleteSet(setId);
+  }
+  btn.closest('.table-row-item').remove();
+  const container = document.getElementById('table-rows-container');
+  container.querySelectorAll('.table-row-item').forEach((row, idx) => {
+    const numEl = row.querySelector('.row-num');
+    if (numEl) numEl.textContent = idx + 1;
+    else row.firstElementChild.textContent = idx + 1;
+  });
+}
+
+function saveTableModeSets() {
+  if (!activeExerciseId || !activeSessionId) return;
+  const container = document.getElementById('table-rows-container');
+  const rows = container.querySelectorAll('.table-row-item');
+  
+  let validCount = 0;
+  
+  rows.forEach(row => {
+    const reps = parseFloat(row.querySelector('.table-rep').value);
+    const weight = parseFloat(row.querySelector('.table-weight').value);
+    const setId = row.getAttribute('data-id');
+    
+    if (reps > 0) {
+      if (setId) {
+         DB.deleteSet(setId);
+      }
+      DB.addSet(activeSessionId, activeExerciseId, reps, weight || 0);
+      validCount++;
+    } else if (setId && isNaN(reps)) {
+       DB.deleteSet(setId);
+    }
+  });
+  
+  showToast(`${validCount} série(s) sauvegardée(s)`, 'success');
+  closeTableMode();
 }
 
 function logSet() {
@@ -767,6 +924,8 @@ function resetToSessionSelector() {
   document.getElementById('session-muscle').classList.add('hidden');
   document.getElementById('session-cardio').classList.add('hidden');
   document.getElementById('log-set-panel').classList.add('hidden');
+  const tablePanel = document.getElementById('past-table-panel');
+  if (tablePanel) tablePanel.classList.add('hidden');
   document.getElementById('active-session-banner').classList.add('hidden');
 }
 

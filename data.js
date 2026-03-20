@@ -69,6 +69,19 @@ const DB = {
   getMachineById(id) {
     return this.getMachines().find(m => m.id === id);
   },
+  addExercise(name, category) {
+    const ex = {
+      id: this._id(),
+      name,
+      category,
+      machineId: 'custom',
+    };
+    const exercises = this._get(this.KEYS.exercises);
+    exercises.push(ex);
+    this._set(this.KEYS.exercises, exercises);
+    if (typeof pushToSupabase === 'function') pushToSupabase('exercises', ex);
+    return ex;
+  },
 
   // ---- Sessions ----
   getSessions() {

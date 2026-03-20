@@ -150,6 +150,12 @@ async function pushToSupabase(table, record) {
   // Always inject user_id for RLS
   const payload = { ...record, user_id: currentUser.id };
   
+  // Strip frontend-only flags that don't exist in SQL schema
+  if (table === 'sessions') {
+    delete payload.isPast;
+    delete payload.manualDuration;
+  }
+  
   const { error } = await supabaseClient
     .from(table)
     .upsert(payload, { onConflict: 'id' });
