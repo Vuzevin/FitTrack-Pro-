@@ -495,7 +495,9 @@ function selectSport(sport) {
     refreshIcons();
     
     // Hide timer if past session
-    document.getElementById('session-muscle-timer').style.display = isPastSessionMode ? 'none' : 'block';
+    const timerEl = document.getElementById('session-muscle-timer');
+    timerEl.style.display = isPastSessionMode ? 'none' : 'block';
+    if (!isPastSessionMode) timerEl.classList.add('active-pulse');
   } else {
     document.getElementById('session-cardio').classList.remove('hidden');
     const icons = {
@@ -1007,6 +1009,8 @@ function finishSession() {
   const duration = sess.isPast && sess.manualDuration ? (sess.manualDuration * 60) : Math.round(sessionElapsedMs / 1000);
   DB.updateSession(activeSessionId, { finished: true, duration });
   clearInterval(sessionTimerInterval);
+  const d = document.getElementById('session-muscle-timer');
+  if(d) d.classList.remove('active-pulse');
   skipRestTimer();
   const sets = DB.getSetsForSession(activeSessionId);
   const vol = sets.reduce((a, s) => a + s.weight * s.reps, 0);
@@ -1067,6 +1071,7 @@ function fireConfetti() {
 
 function finishCardioSession() {
   if (!activeSessionId) return;
+  document.getElementById('cardio-timer').classList.remove('active-pulse');
   const dist = parseFloat(document.getElementById('cardio-distance').value) || 0;
   const hr = parseFloat(document.getElementById('cardio-hr').value) || null;
   const power = parseFloat(document.getElementById('cardio-power').value) || null;
@@ -1107,10 +1112,14 @@ function toggleCardioTimer() {
   if (cardioRunning) {
     clearInterval(cardioTimerInterval);
     cardioRunning = false;
-    btn.textContent = '▶ Reprendre';
+    btn.innerHTML = '<i data-lucide="play" style="width:18px;margin-bottom:-4px;"></i> Reprendre';
+    document.getElementById('cardio-timer').classList.remove('active-pulse');
+    refreshIcons();
   } else {
     cardioRunning = true;
-    btn.textContent = '⏸ Pause';
+    btn.innerHTML = '<i data-lucide="pause" style="width:18px;margin-bottom:-4px;"></i> Pause';
+    document.getElementById('cardio-timer').classList.add('active-pulse');
+    refreshIcons();
     cardioTimerInterval = setInterval(() => {
       cardioElapsed++;
       document.getElementById('cardio-timer').textContent = formatDuration(cardioElapsed);
@@ -1124,7 +1133,9 @@ function resetCardioTimer() {
   cardioRunning = false;
   cardioElapsed = 0;
   document.getElementById('cardio-timer').textContent = '00:00:00';
-  document.getElementById('cardio-play-btn').textContent = '▶ Démarrer';
+  document.getElementById('cardio-timer').classList.remove('active-pulse');
+  document.getElementById('cardio-play-btn').innerHTML = '<i data-lucide="play" style="width:18px;margin-bottom:-4px;"></i> Démarrer';
+  refreshIcons();
 }
 
 function updateCardioPace() {
@@ -1718,6 +1729,28 @@ function confirmReset() {
 // ─────────────────────────────────────────────
 // UTILS
 // ─────────────────────────────────────────────
+function hapticFeedback(style = 'light') {
+  if (!navigator.vibrate) return;
+  const settings = window.DB && typeof DB.getSettings === 'function' ? DB.getSettings() : {vibration: true};
+  if (!settings.vibration) return;
+
+  if (style === 'heavy') navigator.vibrate([40]);
+  else if (style === 'success') navigator.vibrate([30, 50, 30]);
+  else if (style === 'light') navigator.vibrate([15]);
+  else navigator.vibrate([15]);
+}
+
+document.body.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn, .nav-btn, .chip, .sport-card, .history-item, .exercise-item');
+  if (btn) {
+    if (btn.classList.contains('btn-primary') || btn.classList.contains('btn-success')) {
+      hapticFeedback('heavy');
+    } else {
+      hapticFeedback('light');
+    }
+  }
+});
+
 function formatDuration(totalSeconds) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
