@@ -1275,10 +1275,15 @@ function showSessionDetail(sessionId) {
       <div class="kpi-card"><div class="kpi-label">Séries</div><div class="kpi-value">${sets.length}</div></div>
       <div class="kpi-card"><div class="kpi-label">Volume</div><div class="kpi-value">${Math.round(vol)}<span class="kpi-unit"> kg</span></div></div>
     </div>`;
-    if (s.exercises && s.exercises.length) {
-      bodyHtml += s.exercises.map(exId => {
+    const uniqueExIds = [...new Set(sets.map(s2 => s2.exerciseId))];
+    const exIdsToRender = s.exercises && s.exercises.length ? [...new Set([...s.exercises, ...uniqueExIds])] : uniqueExIds;
+
+    if (exIdsToRender.length) {
+      bodyHtml += exIdsToRender.map(exId => {
         const ex = DB.getExerciseById(exId);
         const exSets = sets.filter(s2 => s2.exerciseId === exId);
+        if (exSets.length === 0) return '';
+        
         return `<div style="margin-bottom:12px;">
           <div style="font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:6px;">${ex ? ex.name : exId}</div>
           ${exSets.map((s2, i) => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border);">
