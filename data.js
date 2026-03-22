@@ -95,6 +95,7 @@ const DB = {
       id: this._id(),
       sport,
       date: new Date().toISOString(),
+      startTime: Date.now(),
       duration: 0,
       notes: '',
       exercises: [],
@@ -159,6 +160,16 @@ const DB = {
     this._set(this.KEYS.sets, sets);
     if (typeof pushToSupabase === 'function') pushToSupabase('sets', set);
     return set;
+  },
+  updateSet(id, updates) {
+    const sets = this.getSets();
+    const idx = sets.findIndex(s => s.id === id);
+    if (idx !== -1) {
+      sets[idx] = { ...sets[idx], ...updates };
+      this._set(this.KEYS.sets, sets);
+      if (typeof pushToSupabase === 'function') pushToSupabase('sets', sets[idx]);
+      return sets[idx];
+    }
   },
   deleteSet(id) {
     this._set(this.KEYS.sets, this.getSets().filter(s => s.id !== id));
@@ -250,8 +261,13 @@ function calcIndiceDePerformance(exerciseId) {
   const fourWeeks = new Date(now - 28 * 24 * 3600 * 1000);
   const eightWeeks = new Date(now - 56 * 24 * 3600 * 1000);
 
-  const recentSets = sets.filter(s => new Date(s.timestamp) >= fourWeeks);
-  const olderSets = sets.filter(s => new Date(s.timestamp) >= eightWeeks && new Date(s.timestamp) < fourWeeks);
+  const setsWithDate = sets.map(s => {
+    const session = DB.getSessionById(s.sessionId);
+    return { ...s, sessionDate: session ? new Date(session.date) : new Date(s.timestamp) };
+  });
+
+  const recentSets = setsWithDate.filter(s => s.sessionDate >= fourWeeks);
+  const olderSets = setsWithDate.filter(s => s.sessionDate >= eightWeeks && s.sessionDate < fourWeeks);
 
   if (!recentSets.length || !olderSets.length) return { value: 0, label: 'Pas assez de données' };
 

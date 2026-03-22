@@ -105,11 +105,48 @@ function toggleAuthMode() {
   }
 }
 
+// --- DATA ADAPTERS ---
+// Mapping objects for DB <-> JS conversion
+function toDBObj(obj) {
+  const map = {
+    sessionId: 'session_id',
+    exerciseId: 'exercise_id',
+    machineId: 'machine_id',
+    muscleGroups: 'muscle_groups',
+    restDuration: 'rest_duration',
+    heartRate: 'heart_rate'
+  };
+  const res = {};
+  for (let k in obj) {
+    if (k === 'isPast' || k === 'manualDuration') continue;
+    res[map[k] || k] = obj[k];
+  }
+  return res;
+}
+
+function toJSObj(obj) {
+  const map = {
+    session_id: 'sessionId',
+    exercise_id: 'exerciseId',
+    machine_id: 'machineId',
+    muscle_groups: 'muscleGroups',
+    rest_duration: 'restDuration',
+    heart_rate: 'heartRate'
+  };
+  const res = {};
+  for (let k in obj) {
+    res[map[k] || k] = obj[k];
+  }
+  return res;
+}
+
 // --- SYNC ENGINE ---
 // Pull data from Supabase into LocalStorage to keep app.js synchronous
 async function syncFromSupabase() {
   if (!currentUser) return;
   
+  const spinner = document.getElementById('sync-overlay');
+  if (spinner) spinner.style.display = 'flex';
   showToast('Synchronisation...', 'info');
   
   try {
@@ -129,38 +166,87 @@ async function syncFromSupabase() {
       supabaseClient.from('exercises').select('*').eq('user_id', currentUser.id),
     ]);
     
-    // Save to LocalStorage without triggering push
-    if (profile) localStorage.setItem(DB.KEYS.profile, JSON.stringify(profile));
-    if (sessions) localStorage.setItem(DB.KEYS.sessions, JSON.stringify(sessions));
-    if (sets) localStorage.setItem(DB.KEYS.sets, JSON.stringify(sets));
-    if (metrics) localStorage.setItem(DB.KEYS.metrics, JSON.stringify(metrics));
-    if (machines && machines.length) localStorage.setItem(DB.KEYS.machines, JSON.stringify(machines));
-    if (exercises && exercises.length) localStorage.setItem(DB.KEYS.exercises, JSON.stringify(exercises));
+    // Merge helper for robust offline sync: keeps local data that hasn't successfully pushed yet
+    const mergeData = (localKey, remoteData) => {
+      const remoteArr = remoteData.map(toJSObj);
+      const localArr = DB._get ? DB._get(localKey) : (JSON.parse(localStorage.getItem(localKey)) || []);
+      const remoteIds = new Set(remoteArr.map(i => i.id));
+      return [...remoteArr, ...localArr.filter(i => !remoteIds.has(i.id))];
+    };
+
+    // Save to LocalStorage intelligently
+    if (profile) localStorage.setItem(DB.KEYS.profile, JSON.stringify(toJSObj(profile)));
+    if (sessions) localStorage.setItem(DB.KEYS.sessions, JSON.stringify(mergeData(DB.KEYS.sessions, sessions)));
+    if (sets) localStorage.setItem(DB.KEYS.sets, JSON.stringify(mergeData(DB.KEYS.sets, sets)));
+    if (metrics) localStorage.setItem(DB.KEYS.metrics, JSON.stringify(mergeData(DB.KEYS.metrics, metrics)));
+    if (machines && machines.length) localStorage.setItem(DB.KEYS.machines, JSON.stringify(mergeData(DB.KEYS.machines, machines)));
+    if (exercises && exercises.length) localStorage.setItem(DB.KEYS.exercises, JSON.stringify(mergeData(DB.KEYS.exercises, exercises)));
     
+    await uploadUnsyncedData({ profile, sessions, sets, metrics, machines, exercises });
+
     showToast('Données synchronisées', 'success');
   } catch(e) {
     console.error("Erreur de synchro:", e);
     showToast('Erreur de synchronisation cloud', 'danger');
+  } finally {
+    if (spinner) spinner.style.display = 'none';
+  }
+}
+
+async function uploadUnsyncedData(remoteData) {
+  if (!currentUser) return;
+  const { profile, sessions, sets, metrics, machines, exercises } = remoteData;
+  
+  const pushMissing = async (localKey, remoteArr, table) => {
+    const localArr = JSON.parse(localStorage.getItem(localKey)) || [];
+    const remoteIds = new Set((remoteArr || []).map(i => i.id));
+    const missingLocal = localArr.filter(i => !remoteIds.has(i.id));
+    
+    for (const item of missingLocal) {
+      await pushToSupabase(table, item);
+    }
+  };
+
+  await pushMissing(DB.KEYS.sessions, sessions ? sessions.map(toJSObj) : [], 'sessions');
+  await pushMissing(DB.KEYS.sets, sets ? sets.map(toJSObj) : [], 'sets');
+  await pushMissing(DB.KEYS.metrics, metrics ? metrics.map(toJSObj) : [], 'metrics');
+  await pushMissing(DB.KEYS.machines, machines ? machines.map(toJSObj) : [], 'machines');
+  await pushMissing(DB.KEYS.exercises, exercises ? exercises.map(toJSObj) : [], 'exercises');
+  
+  const localProfile = JSON.parse(localStorage.getItem(DB.KEYS.profile)) || {};
+  if (localProfile && Object.keys(localProfile).length > 0 && !profile) {
+    await pushToSupabase('profiles', { ...localProfile, id: 'profile' });
   }
 }
 
 // Background push to Supabase
 async function pushToSupabase(table, record) {
   if (!currentUser) return;
-  // Always inject user_id for RLS
-  const payload = { ...record, user_id: currentUser.id };
-  
-  // Strip frontend-only flags that don't exist in SQL schema
-  if (table === 'sessions') {
-    delete payload.isPast;
-    delete payload.manualDuration;
-  }
-  
-  const { error } = await supabaseClient
-    .from(table)
-    .upsert(payload, { onConflict: 'id' });
+  try {
+    if (!navigator.onLine) {
+       console.warn(`[pushToSupabase] Appareil hors ligne. Données enregistrées localement uniquement.`);
+       return;
+    }
+    // Convert JS object to DB schema
+    const mappedRecord = toDBObj(record);
+    // Always inject user_id for RLS
+    const payload = { ...mappedRecord, user_id: currentUser.id };
     
-  if (error) console.error(`Erreur Push Supabase [${table}]:`, error.message);
+    console.log(`[pushToSupabase] Sending to table ${table}:`, payload);
+    
+    const { data, error } = await supabaseClient
+      .from(table)
+      .upsert(payload, { onConflict: 'id' });
+      
+    if (error) {
+      console.error(`Erreur Push Supabase [${table}]:`, error.message);
+      showToast(`Erreur de sauvegarde: ${error.message}`, 'error');
+    } else {
+      console.log(`[pushToSupabase] Success ${table}`);
+    }
+  } catch(err) {
+    console.error(`Exception in pushToSupabase [${table}]:`, err);
+  }
 }
 
 async function deleteFromSupabase(table, id) {

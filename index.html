@@ -19,6 +19,25 @@
 </head>
 <body>
 
+<!-- ===== OFFLINE BADGE ===== -->
+<div id="offline-badge" style="display:none; position:fixed; top:env(safe-area-inset-top, 0px); left:50%; transform:translateX(-50%); z-index:10000; background:rgba(248,113,113,0.15); border:1px solid rgba(248,113,113,0.3); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:var(--text-white); padding:6px 16px; border-radius:0 0 12px 12px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+  <i data-lucide="wifi-off" style="width:14px; height:14px; color:var(--danger);"></i> Mode hors ligne
+</div>
+<script>
+  function updateOfflineStatus() {
+    const badge = document.getElementById('offline-badge');
+    if (!navigator.onLine) {
+      badge.style.display = 'flex';
+      badge.style.animation = 'fadeSlideIn 0.3s forwards';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  window.addEventListener('online', updateOfflineStatus);
+  window.addEventListener('offline', updateOfflineStatus);
+  document.addEventListener('DOMContentLoaded', updateOfflineStatus);
+</script>
+
 <!-- ===== AUTH OVERLAY ===== -->
 <div id="auth-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--bg-base); flex-direction:column; align-items:center; justify-content:center; padding:var(--space-lg);">
   <div style="text-align:center; margin-bottom:var(--space-xl);">
@@ -48,6 +67,15 @@
 
 <!-- ===== TOAST CONTAINER ===== -->
 <div id="toast-container"></div>
+
+<!-- ===== SYNC LOADING OVERLAY ===== -->
+<div id="sync-overlay" style="display:none; position:fixed; inset:0; z-index:9998; background:rgba(10, 10, 15, 0.8); backdrop-filter:blur(4px); flex-direction:column; align-items:center; justify-content:center;">
+  <style>
+    @keyframes spin { 100% { transform:rotate(360deg); } }
+  </style>
+  <div style="width:48px;height:48px;border:4px solid var(--accent-light);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;"></div>
+  <div style="margin-top:16px;font-weight:700;color:var(--text-white);">Synchronisation...</div>
+</div>
 
 <!-- ===== REST TIMER OVERLAY ===== -->
 <div id="rest-timer-overlay">
@@ -151,6 +179,20 @@
         <div class="kpi-label">Poids actuel</div>
         <div class="kpi-value"><span id="kpi-weight">—</span><span class="kpi-unit"> kg</span></div>
         <div class="kpi-trend neutral" id="kpi-weight-trend">—</div>
+      </div>
+    </div>
+
+    <!-- Targeted Muscles -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">Muscles ciblés (7 jours)</div>
+      </div>
+      <div class="card card-glass">
+        <div id="dashboard-muscle-map">
+          <div class="empty-state" style="padding:var(--space-sm); text-align:center;">
+             <div class="empty-desc" style="font-size:12px;">Aucune donnée musculaire récente.</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -276,7 +318,7 @@
             <div class="page-subtitle" id="session-muscle-timer">00:00</div>
           </div>
           <div style="display:flex;gap:8px;">
-            <button class="btn btn-secondary btn-sm" onclick="finishSession()">Terminer ✓</button>
+            <button class="btn btn-secondary btn-sm" onclick="finishSession()" style="box-shadow: 0 0 10px rgba(124, 58, 237, 0.2); border-color: var(--accent-light); color: var(--accent-light);">Terminer ✓</button>
           </div>
         </div>
       </div>
@@ -364,7 +406,7 @@
           </div>
           
           <button class="btn btn-secondary btn-full btn-sm mt-sm mb-sm" onclick="addTableRow()">+ Ajouter une série</button>
-          <button class="btn btn-success btn-full btn-lg" onclick="saveTableModeSets()">✓ Valider l'exercice</button>
+          <button class="btn btn-success btn-full btn-lg" onclick="handleValidateTableMode()">✓ Valider l'exercice</button>
         </div>
       </div>
     </div>
@@ -427,6 +469,45 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ======================================================= -->
+  <!-- CELEBRATION MODAL (NEW)                                  -->
+  <!-- ======================================================= -->
+  <div id="modal-celebration" class="modal-overlay" style="z-index: 10001;">
+    <!-- Confetti container -->
+    <div id="confetti-container" style="position:absolute; inset:0; pointer-events:none; overflow:hidden;"></div>
+    
+    <div class="bottom-sheet" style="background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-base) 100%); text-align: center; padding: 40px 24px; border-top: 1px solid var(--accent); box-shadow: 0 -10px 40px rgba(124,58,237,0.3);">
+      <div style="font-size: 64px; margin-bottom: 16px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">🎉</div>
+      <h2 style="font-size: 28px; font-weight: 900; color: var(--text-white); margin-bottom: 8px; letter-spacing: -1px;">Séance Terminée !</h2>
+      <p style="color: var(--text-secondary); font-size: 15px; margin-bottom: 32px;">Excellent travail. Voici votre bilan d'aujourd'hui :</p>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 32px;">
+        <div class="card card-glass card-glow" style="padding: 16px; border-color: rgba(124,58,237,0.3);">
+          <div style="font-size: 11px; color: var(--accent-light); font-weight: 700; text-transform: uppercase;">Séries</div>
+          <div style="font-size: 32px; font-weight: 900; color: var(--text-white);" id="celeb-sets">0</div>
+        </div>
+        <div class="card card-glass card-glow" style="padding: 16px; border-color: rgba(16,185,129,0.3);">
+          <div style="font-size: 11px; color: #34d399; font-weight: 700; text-transform: uppercase;">Volume</div>
+          <div style="font-size: 32px; font-weight: 900; color: var(--text-white);"><span id="celeb-vol">0</span><span style="font-size: 14px; color: var(--text-muted);">kg</span></div>
+        </div>
+        <div class="card card-glass" style="grid-column: span 2; padding: 16px; display:flex; justify-content:space-between; align-items:center;">
+           <span style="font-size:13px; color:var(--text-secondary); font-weight:600;">Durée de la séance</span>
+           <span style="font-size:18px; font-weight:800; color:var(--text-white);" id="celeb-time">00:00</span>
+        </div>
+      </div>
+      
+      <div id="celeb-pr-banner" class="hidden" style="background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.3); border-radius: var(--radius-md); padding: 12px; margin-bottom: 32px; display: flex; align-items: center; gap: 12px; text-align: left;">
+        <div style="font-size:24px;">🏆</div>
+        <div>
+          <div style="font-size: 13px; font-weight: 800; color: var(--warning);">Nouveaux Records !</div>
+          <div style="font-size: 11px; color: var(--text-secondary);" id="celeb-pr-text">Vous avez battu vos PR aujourd'hui.</div>
+        </div>
+      </div>
+      
+      <button class="btn btn-primary btn-full btn-lg" onclick="closeCelebrationModal()" style="font-size: 16px;">Super, retour à l'accueil</button>
     </div>
   </div>
 

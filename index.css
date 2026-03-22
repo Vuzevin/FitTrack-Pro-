@@ -1078,3 +1078,52 @@ body {
 .fw-black { font-weight: 900; }
 .fs-sm { font-size: 13px; }
 .fs-xs { font-size: 11px; }
+
+/* ===== NEW ANIMATIONS ===== */
+@keyframes popIn {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.confetti-piece {
+  position: absolute;
+  width: 8px;
+  height: 16px;
+  background: var(--accent);
+  top: -20px;
+  opacity: 0;
+  animation: fall linear forwards;
+}
+
+@keyframes fall {
+  0% { top: -20px; opacity: 1; transform: rotate(0deg) translateX(0); }
+  100% { top: 100vh; opacity: 0; transform: rotate(720deg) translateX(50px); }
+}
+
+.muscle-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: 8px;
+}
+.muscle-bar-label {
+  width: 80px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: right;
+}
+.muscle-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.muscle-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%);
+  border-radius: var(--radius-full);
+  transition: width 1s var(--ease);
+}

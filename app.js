@@ -98,10 +98,22 @@ function renderDashboard() {
   const circ = 2 * Math.PI * 34;
   const offset = circ - (forme / 100) * circ;
   document.getElementById('forme-ring').style.strokeDashoffset = offset;
-  const formeDescHtml = forme >= 80 ? '<i data-lucide="flame" style="width:16px;margin-bottom:-3px;"></i> En super forme !' :
-    forme >= 50 ? '<i data-lucide="thumbs-up" style="width:16px;margin-bottom:-3px;"></i> Bonne régularité' :
-      forme >= 20 ? '<i data-lucide="alert-triangle" style="width:16px;margin-bottom:-3px;"></i> Reprenez le rythme' :
-        '<i data-lucide="moon" style="width:16px;margin-bottom:-3px;"></i> Pas de séances récentes';
+  
+  // Dynamic color for Indice de Forme ring
+  let gradientColors = ['#f87171', '#ef4444']; // Red  (< 30)
+  if (forme >= 80) gradientColors = ['#a78bfa', '#7c3aed']; // Purple
+  else if (forme >= 60) gradientColors = ['#34d399', '#10b981']; // Green
+  else if (forme >= 30) gradientColors = ['#fbbf24', '#f59e0b']; // Orange
+  
+  const grad = document.getElementById('formeGrad');
+  if (grad) {
+    grad.innerHTML = `<stop offset="0%" stop-color="${gradientColors[0]}" /><stop offset="100%" stop-color="${gradientColors[1]}" />`;
+  }
+
+  const formeDescHtml = forme >= 80 ? '<i data-lucide="flame" style="width:16px;margin-bottom:-3px;color:#a78bfa;"></i> En super forme !' :
+    forme >= 60 ? '<i data-lucide="thumbs-up" style="width:16px;margin-bottom:-3px;color:#34d399;"></i> Bonne régularité' :
+      forme >= 30 ? '<i data-lucide="alert-triangle" style="width:16px;margin-bottom:-3px;color:#fbbf24;"></i> Reprenez le rythme' :
+        '<i data-lucide="moon" style="width:16px;margin-bottom:-3px;color:#f87171;"></i> Pas de séances récentes';
   document.getElementById('indice-forme-desc').innerHTML = formeDescHtml;
 
   // KPIs
@@ -177,7 +189,7 @@ function renderDashboard() {
   const el = document.getElementById('recent-sessions-list');
   if (!recent.length) {
     el.innerHTML = `<div class="empty-state" style="padding:var(--space-lg);">
-      <div class="empty-icon"><i data-lucide="clipboard-list"></i></div>
+      <div class="empty-icon" style="color:var(--text-muted);"><i data-lucide="clipboard-list"></i></div>
       <div class="empty-title">Aucune séance</div>
       <div class="empty-desc">Commencez votre premier entraînement !</div>
     </div>`;
@@ -185,8 +197,66 @@ function renderDashboard() {
     el.innerHTML = recent.map(s => sessionHistoryCard(s)).join('');
   }
 
+  // Render Dashboard Targeted Muscles
+  renderTargetedMuscles(sessions, allSets);
+
   // Render Exercise Suggestions
   renderExerciseSuggestions(allSets, sessions);
+}
+
+function renderTargetedMuscles(sessions, allSets) {
+  const container = document.getElementById('dashboard-muscle-map');
+  if (!container) return;
+  const machines = DB.getMachines();
+  const exercises = DB.getExercises();
+  
+  const now = new Date();
+  const weekAgo = new Date(now - 7 * 24 * 3600 * 1000);
+  const recentSessions = sessions.filter(s => s.finished && new Date(s.date) >= weekAgo);
+  
+  const muscleCount = {};
+  let totalSets = 0;
+  
+  recentSessions.forEach(sess => {
+    const sessSets = allSets.filter(set => set.sessionId === sess.id);
+    sessSets.forEach(set => {
+      const ex = exercises.find(e => e.id === set.exerciseId);
+      if (ex) {
+        const m = machines.find(mach => mach.id === ex.machineId);
+        if (m && m.muscleGroups) {
+          m.muscleGroups.forEach(mg => {
+            muscleCount[mg] = (muscleCount[mg] || 0) + 1;
+            totalSets++;
+          });
+        }
+      }
+    });
+  });
+
+  if (totalSets === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding:var(--space-sm); text-align:center;">
+      <div class="empty-desc" style="font-size:12px;">Aucune donnée musculaire récente.</div>
+    </div>`;
+    return;
+  }
+
+  const sortedMuscles = Object.entries(muscleCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+
+  const html = sortedMuscles.map(([name, count]) => {
+    const pct = Math.round((count / totalSets) * 100);
+    return `
+      <div class="muscle-bar-wrap">
+        <div class="muscle-bar-label">${name}</div>
+        <div class="muscle-bar-track">
+          <div class="muscle-bar-fill" style="width: ${pct}%;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  container.innerHTML = html;
 }
 
 function renderExerciseSuggestions(allSets, sessions) {
@@ -465,6 +535,18 @@ function resumeActiveSession() {
   if (!activeSessionId) return;
   const sess = DB.getSessionById(activeSessionId);
   if (!sess) return;
+
+  if (sess.startTime && !isPastSessionMode) {
+    sessionStartTime = sess.startTime;
+    sessionElapsedMs = Date.now() - sess.startTime;
+  } else {
+    sessionElapsedMs = 0;
+  }
+  clearInterval(sessionTimerInterval);
+  if (!isPastSessionMode) {
+    sessionTimerInterval = setInterval(updateSessionTimer, 1000);
+  }
+
   document.getElementById('session-selector').style.display = 'none';
   document.getElementById('session-muscle').classList.add('hidden');
   document.getElementById('session-cardio').classList.add('hidden');
@@ -575,6 +657,7 @@ function filterExercises() {
 
 function addExerciseToSession(exerciseId) {
   closeExerciseModal();
+  saveTableModeSets(true);
   const sess = DB.getSessionById(activeSessionId);
   if (!sess) return;
   if (!sess.exercises) sess.exercises = [];
@@ -623,6 +706,7 @@ function renderExerciseBlocks() {
 }
 
 function selectExercise(exId) {
+  saveTableModeSets(true);
   activeExerciseId = exId;
   showLogSetPanel(exId);
   renderExerciseBlocks();
@@ -714,7 +798,8 @@ function checkLivePR() {
   }
 }
 
-function closeTableMode() {
+function closeTableMode(skipSave = false) {
+  if (!skipSave) saveTableModeSets(true);
   document.getElementById('past-table-panel').classList.add('hidden');
   activeExerciseId = null;
   renderExerciseBlocks();
@@ -778,37 +863,54 @@ function removeTableRow(btn, setId) {
   });
 }
 
-function saveTableModeSets() {
+function saveTableModeSets(silent = false) {
   if (!activeExerciseId || !activeSessionId) return;
+  const panel = document.getElementById('past-table-panel');
+  if (!panel || panel.classList.contains('hidden')) return;
+
   const container = document.getElementById('table-rows-container');
   const rows = container.querySelectorAll('.table-row-item');
   
   let validCount = 0;
   
   rows.forEach(row => {
-    const reps = parseFloat(row.querySelector('.table-rep').value);
-    const weight = parseFloat(row.querySelector('.table-weight').value);
+    let repsText = row.querySelector('.table-rep').value || '';
+    let weightText = row.querySelector('.table-weight').value || '';
+    const reps = parseFloat(repsText.replace(',', '.'));
+    const weight = parseFloat(weightText.replace(',', '.'));
     const setId = row.getAttribute('data-id');
     
     if (reps > 0) {
       if (setId) {
-         DB.deleteSet(setId);
+         DB.updateSet(setId, { reps, weight: weight || 0 });
+      } else {
+         const newSet = DB.addSet(activeSessionId, activeExerciseId, reps, weight || 0);
+         const sess = DB.getSessionById(activeSessionId);
+         if (sess && sess.isPast) {
+           DB.updateSet(newSet.id, { timestamp: sess.date });
+         }
       }
-      DB.addSet(activeSessionId, activeExerciseId, reps, weight || 0);
       validCount++;
     } else if (setId && isNaN(reps)) {
        DB.deleteSet(setId);
     }
   });
   
-  showToast(`${validCount} série(s) sauvegardée(s)`, 'success');
-  closeTableMode();
+  if (silent !== true && validCount > 0) showToast(`${validCount} série(s) sauvegardée(s)`, 'success');
+}
+
+function handleValidateTableMode() {
+  saveTableModeSets(false);
+  closeTableMode(true);
 }
 
 function logSet() {
   if (!activeExerciseId || !activeSessionId) { showToast('Sélectionnez un exercice d\'abord', 'warning'); return; }
-  const reps = parseFloat(document.getElementById('stepper-reps').textContent) || 0;
-  let weight = parseFloat(document.getElementById('stepper-weight').textContent) || 0;
+  
+  const repsText = document.getElementById('stepper-reps').textContent || '';
+  const weightText = document.getElementById('stepper-weight').textContent || '';
+  const reps = parseFloat(repsText.replace(',', '.')) || 0;
+  let weight = parseFloat(weightText.replace(',', '.')) || 0;
   
   const ex = DB.getExerciseById(activeExerciseId);
   const isBw = ex && ex.category === 'Poids du corps';
@@ -821,7 +923,12 @@ function logSet() {
   
   if (reps <= 0) { showToast('Entrez un nombre de répétitions', 'warning'); return; }
 
-  DB.addSet(activeSessionId, activeExerciseId, reps, weight);
+  const newSet = DB.addSet(activeSessionId, activeExerciseId, reps, weight);
+  const sess = DB.getSessionById(activeSessionId);
+  if (sess && sess.isPast) {
+    DB.updateSet(newSet.id, { timestamp: sess.date });
+  }
+
   renderExerciseBlocks();
   showLogSetPanel(activeExerciseId);
   showToast(`<i data-lucide="check" style="width:16px;margin-bottom:-3px;margin-right:4px;"></i> ${reps} rép × ${weight} kg enregistré`, 'success');
@@ -883,6 +990,17 @@ function addRestTime(secs) {
 // FINISH SESSION
 // ─────────────────────────────────────────────
 function finishSession() {
+  saveTableModeSets(true);
+  
+  if (!isPastSessionMode && activeExerciseId && activeSessionId) {
+    const existing = DB.getSetsForExercise(activeExerciseId).filter(s => s.sessionId === activeSessionId);
+    if (!existing.length) {
+      const repsText = document.getElementById('stepper-reps').textContent || '';
+      const reps = parseFloat(repsText.replace(',', '.')) || 0;
+      if (reps > 0) logSet();
+    }
+  }
+  
   if (!activeSessionId) return;
   const sess = DB.getSessionById(activeSessionId);
   const duration = sess.isPast && sess.manualDuration ? (sess.manualDuration * 60) : Math.round(sessionElapsedMs / 1000);
@@ -891,8 +1009,59 @@ function finishSession() {
   skipRestTimer();
   const sets = DB.getSetsForSession(activeSessionId);
   const vol = sets.reduce((a, s) => a + s.weight * s.reps, 0);
-  showToast(`<i data-lucide="check-circle-2" style="width:18px;margin-bottom:-4px;margin-right:4px;"></i> Séance terminée ! ${sets.length} séries / ${Math.round(vol)} kg`, 'success');
+
+  // Instead of a Toast, show the Celebration Modal for muscle sessions
+  if (sess.sport === 'muscle' || sess.sport === 'bodyweight') {
+    showCelebrationModal(sets.length, Math.round(vol), duration, sets);
+  } else {
+    showToast(`<i data-lucide="check-circle-2" style="width:18px;margin-bottom:-4px;margin-right:4px;"></i> Séance terminée ! ${sets.length} séries / ${Math.round(vol)} kg`, 'success');
+  }
+  
   resetToSessionSelector();
+}
+
+function showCelebrationModal(setCount, volume, durationSecs, sessionSets) {
+  document.getElementById('celeb-sets').textContent = setCount;
+  document.getElementById('celeb-vol').textContent = volume;
+  document.getElementById('celeb-time').textContent = formatDuration(durationSecs);
+  
+  // Check if any PRs were hit in this session
+  // Since PRs are computed over history, if a set from this session IS the PR, we hit one.
+  const prBanner = document.getElementById('celeb-pr-banner');
+  let hitPR = false;
+  
+  const exercisesInSession = [...new Set(sessionSets.map(s => s.exerciseId))];
+  exercisesInSession.forEach(exId => {
+    const pr = DB.getPRForExercise(exId);
+    if (pr && sessionSets.find(s => s.id === pr.id)) hitPR = true;
+  });
+  
+  if (hitPR) prBanner.classList.remove('hidden');
+  else prBanner.classList.add('hidden');
+
+  document.getElementById('modal-celebration').classList.add('open');
+  fireConfetti();
+}
+
+function closeCelebrationModal() {
+  document.getElementById('modal-celebration').classList.remove('open');
+  document.getElementById('confetti-container').innerHTML = '';
+}
+
+function fireConfetti() {
+  const container = document.getElementById('confetti-container');
+  container.innerHTML = '';
+  const colors = ['#7c3aed', '#34d399', '#fbbf24', '#f87171', '#60a5fa', '#a78bfa'];
+  
+  for (let i = 0; i < 60; i++) {
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti-piece';
+    confetti.style.left = Math.random() * 100 + '%';
+    confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+    confetti.style.animationDuration = (Math.random() * 2 + 1.5) + 's';
+    confetti.style.animationDelay = Math.random() * 1.5 + 's';
+    container.appendChild(confetti);
+  }
 }
 
 function finishCardioSession() {
@@ -1560,11 +1729,14 @@ document.getElementById('modal-session-detail').addEventListener('click', functi
 });
 
 // Contenteditable steppers — re-validate on blur
-['stepper-reps', 'stepper-weight'].forEach(id => {
+['stepper-reps', 'stepper-weight', 'stepper-leste'].forEach(id => {
   const el = document.getElementById(id);
+  if(!el) return;
   el.addEventListener('blur', () => {
-    const v = parseFloat(el.textContent);
+    let raw = el.textContent.replace(',', '.');
+    const v = parseFloat(raw);
     if (isNaN(v) || v < 0) el.textContent = '0';
+    else el.textContent = v;
     checkLivePR();
   });
   el.addEventListener('input', checkLivePR);
@@ -1649,3 +1821,12 @@ function seedDemoData() {
     DB.addMetric(w, calcBMI(w, 178), new Date(now - daysAgo * day).toISOString());
   });
 }
+
+// Network Status Observers
+window.addEventListener('offline', () => {
+  showToast('Vous êtes hors ligne. Les données seront sauvegardées localement.', 'warning');
+});
+window.addEventListener('online', () => {
+  showToast('Connexion rétablie !', 'success');
+  if (typeof syncFromSupabase === 'function') syncFromSupabase();
+});
