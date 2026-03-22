@@ -536,9 +536,10 @@ function resumeActiveSession() {
   const sess = DB.getSessionById(activeSessionId);
   if (!sess) return;
 
-  if (sess.startTime && !isPastSessionMode) {
-    sessionStartTime = sess.startTime;
-    sessionElapsedMs = Date.now() - sess.startTime;
+  const st = sess.startTime || new Date(sess.date).getTime();
+  if (st && !isPastSessionMode) {
+    sessionStartTime = st;
+    sessionElapsedMs = Date.now() - st;
   } else {
     sessionElapsedMs = 0;
   }

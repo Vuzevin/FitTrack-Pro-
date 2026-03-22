@@ -118,7 +118,7 @@ function toDBObj(obj) {
   };
   const res = {};
   for (let k in obj) {
-    if (k === 'isPast' || k === 'manualDuration') continue;
+    if (k === 'isPast' || k === 'manualDuration' || k === 'startTime') continue;
     res[map[k] || k] = obj[k];
   }
   return res;
@@ -136,6 +136,9 @@ function toJSObj(obj) {
   const res = {};
   for (let k in obj) {
     res[map[k] || k] = obj[k];
+  }
+  if (res.date && !res.startTime) {
+    res.startTime = new Date(res.date).getTime();
   }
   return res;
 }
