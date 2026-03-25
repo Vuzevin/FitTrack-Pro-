@@ -46,6 +46,19 @@ function navigate(view) {
   refreshIcons();
 }
 
+// ─────────────────────────────────────────────
+// SMART HOVER GLOW
+// ─────────────────────────────────────────────
+document.addEventListener('mousemove', e => {
+  for (const card of document.getElementsByClassName('card')) {
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    card.style.setProperty('--mouse-x', `${x}px`);
+    card.style.setProperty('--mouse-y', `${y}px`);
+  }
+});
+
 function refreshIcons() {
   if (window.lucide) {
     setTimeout(() => lucide.createIcons(), 10);
@@ -93,28 +106,35 @@ function renderDashboard() {
 
   // Indice de Forme
   const forme = calcIndiceDeFormeFor(sessions);
-  document.getElementById('indice-forme').textContent = forme;
-  document.getElementById('forme-ring-text').textContent = forme;
+  const formeTextEl = document.getElementById('indice-forme');
+  const ringTextEl = document.getElementById('forme-ring-text');
+  
+  if (formeTextEl) formeTextEl.textContent = forme;
+  if (ringTextEl) ringTextEl.textContent = forme;
+  
   const circ = 2 * Math.PI * 34;
   const offset = circ - (forme / 100) * circ;
-  document.getElementById('forme-ring').style.strokeDashoffset = offset;
+  const ringEl = document.getElementById('forme-ring');
+  if (ringEl) ringEl.style.strokeDashoffset = offset;
   
-  // Dynamic color for Indice de Forme ring
-  let gradientColors = ['#f87171', '#ef4444']; // Red  (< 30)
-  if (forme >= 80) gradientColors = ['#a78bfa', '#7c3aed']; // Purple
-  else if (forme >= 60) gradientColors = ['#34d399', '#10b981']; // Green
-  else if (forme >= 30) gradientColors = ['#fbbf24', '#f59e0b']; // Orange
+  // Dynamic color for Indice de Forme ring - Premium Palette
+  let gradientColors = ['#ef4444', '#f87171']; // Red (< 30) - Low
+  if (forme >= 85) gradientColors = ['#7c3aed', '#c084fc']; // Purple - Elite
+  else if (forme >= 65) gradientColors = ['#10b981', '#34d399']; // Green - High
+  else if (forme >= 40) gradientColors = ['#f59e0b', '#fbbf24']; // Orange - Moderate
   
   const grad = document.getElementById('formeGrad');
   if (grad) {
     grad.innerHTML = `<stop offset="0%" stop-color="${gradientColors[0]}" /><stop offset="100%" stop-color="${gradientColors[1]}" />`;
   }
 
-  const formeDescHtml = forme >= 80 ? '<i data-lucide="flame" style="width:16px;margin-bottom:-3px;color:#a78bfa;"></i> En super forme !' :
-    forme >= 60 ? '<i data-lucide="thumbs-up" style="width:16px;margin-bottom:-3px;color:#34d399;"></i> Bonne régularité' :
-      forme >= 30 ? '<i data-lucide="alert-triangle" style="width:16px;margin-bottom:-3px;color:#fbbf24;"></i> Reprenez le rythme' :
-        '<i data-lucide="moon" style="width:16px;margin-bottom:-3px;color:#f87171;"></i> Pas de séances récentes';
-  document.getElementById('indice-forme-desc').innerHTML = formeDescHtml;
+  const moodIcon = forme >= 85 ? 'sparkles' : forme >= 65 ? 'zap' : forme >= 40 ? 'activity' : 'battery-low';
+  const formeDescHtml = forme >= 85 ? `<i data-lucide="${moodIcon}" style="width:16px;margin-bottom:-3px;color:var(--accent-light);"></i> Performance Élite` :
+    forme >= 65 ? `<i data-lucide="${moodIcon}" style="width:16px;margin-bottom:-3px;color:var(--success);"></i> Excellente Forme` :
+      forme >= 40 ? `<i data-lucide="${moodIcon}" style="width:16px;margin-bottom:-3px;color:var(--warning);"></i> En progression` :
+        `<i data-lucide="${moodIcon}" style="width:16px;margin-bottom:-3px;color:var(--danger);"></i> Phase de repos`;
+  const descEl = document.getElementById('indice-forme-desc');
+  if (descEl) descEl.innerHTML = formeDescHtml;
 
   // KPIs
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -136,6 +156,29 @@ function renderDashboard() {
   const cardioThisMonth = monthSessions.filter(s => s.sport === 'run' || s.sport === 'cycle');
   const dist = cardioThisMonth.reduce((acc, s) => acc + (s.distance || 0), 0);
   document.getElementById('kpi-cardio-dist').textContent = dist > 0 ? dist.toFixed(1) : '0';
+
+  // New KPI: Calories (mois)
+  const caloriesMonth = monthSessions.reduce((acc, s) => {
+    const sSets = allSets.filter(set => set.sessionId === s.id);
+    return acc + calcTotalCaloriesForSession(s, sSets);
+  }, 0);
+  const calEl = document.getElementById('kpi-calories');
+  if (calEl) calEl.textContent = caloriesMonth >= 1000 ? (caloriesMonth / 1000).toFixed(1) + 'k' : caloriesMonth;
+
+  // New KPI: Weekly Goal
+  const weekStart = new Date();
+  weekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1)); // Lundi
+  weekStart.setHours(0,0,0,0);
+  const weekSessions = sessions.filter(s => s.finished && new Date(s.date) >= weekStart);
+  const goalEl = document.getElementById('kpi-weekly-goal');
+  const target = profile.weeklyGoal || 4;
+  if (goalEl) goalEl.textContent = `${weekSessions.length}/${target}`;
+  const goalTrend = document.getElementById('kpi-weekly-trend');
+  if (goalTrend) {
+    const pct = Math.min(100, Math.round((weekSessions.length / target) * 100));
+    goalTrend.textContent = `${pct}% de l'objectif`;
+    goalTrend.className = 'kpi-trend ' + (pct >= 100 ? 'up' : 'neutral');
+  }
 
   // Streak (jours consécutifs)
   let streak = 0;
@@ -200,8 +243,41 @@ function renderDashboard() {
   // Render Dashboard Targeted Muscles
   renderTargetedMuscles(sessions, allSets);
 
+  // Render Muscle Recovery
+  renderRecoveryDashboard();
+
   // Render Exercise Suggestions
   renderExerciseSuggestions(allSets, sessions);
+}
+
+function renderRecoveryDashboard() {
+  const container = document.getElementById('dashboard-recovery-list');
+  if (!container) return;
+  
+  const recovery = getMuscleRecovery();
+  
+  const html = Object.entries(recovery)
+    .sort((a, b) => a[1] - b[1]) // show most tired first
+    .slice(0, 4) // show top 4 needing recovery
+    .map(([name, pct]) => {
+      let color = 'var(--success)';
+      if (pct < 40) color = 'var(--danger)';
+      else if (pct < 80) color = 'var(--warning)';
+      
+      return `
+        <div class="recovery-item">
+          <div class="recovery-item-header">
+            <span>${name}</span>
+            <span style="color:${color}">${pct}%</span>
+          </div>
+          <div class="recovery-bar-track">
+            <div class="recovery-bar-fill" style="width:${pct}%; background:${color}"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+  container.innerHTML = html || '<div class="empty-state">Tout est récupéré ! ⚡</div>';
 }
 
 function renderTargetedMuscles(sessions, allSets) {
@@ -222,9 +298,10 @@ function renderTargetedMuscles(sessions, allSets) {
     sessSets.forEach(set => {
       const ex = exercises.find(e => e.id === set.exerciseId);
       if (ex) {
-        const m = machines.find(mach => mach.id === ex.machineId);
-        if (m && m.muscleGroups) {
-          m.muscleGroups.forEach(mg => {
+        // Updated: Using direct muscleGroups mapping from data.js
+        const mGroups = ex.muscleGroups;
+        if (mGroups) {
+          mGroups.forEach(mg => {
             muscleCount[mg] = (muscleCount[mg] || 0) + 1;
             totalSets++;
           });
@@ -247,10 +324,13 @@ function renderTargetedMuscles(sessions, allSets) {
   const html = sortedMuscles.map(([name, count]) => {
     const pct = Math.round((count / totalSets) * 100);
     return `
-      <div class="muscle-bar-wrap">
-        <div class="muscle-bar-label">${name}</div>
-        <div class="muscle-bar-track">
-          <div class="muscle-bar-fill" style="width: ${pct}%;"></div>
+      <div class="muscle-bar-wrap" style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <div class="muscle-bar-label" style="font-size:11px; font-weight:700; color:var(--text-secondary);">${name}</div>
+          <div style="font-size:10px; font-weight:800; color:var(--text-muted);">${pct}%</div>
+        </div>
+        <div class="muscle-bar-track" style="height:6px; background:var(--bg-elevated); border-radius:3px; overflow:hidden;">
+          <div class="muscle-bar-fill" style="width: ${pct}%; height:100%; border-radius:3px; background:var(--accent); box-shadow:0 0 10px var(--accent-glow);"></div>
         </div>
       </div>
     `;
@@ -371,24 +451,45 @@ function renderExerciseSuggestions(allSets, sessions) {
 }
 
 function sessionHistoryCard(s) {
-  const icons = { muscle: '<i data-lucide="dumbbell"></i>', bodyweight: '<i data-lucide="dumbbell"></i>', run: '<i data-lucide="activity"></i>', cycle: '<i data-lucide="bike"></i>' };
-  const classes = { muscle: 'icon-muscle', bodyweight: 'icon-muscle', run: 'icon-run', cycle: 'icon-cycle' };
-  const labels = { muscle: 'Musculation', bodyweight: 'Musculation', run: 'Course à pied', cycle: 'Vélo' };
+  const icons = { 
+    muscle: 'dumbbell', 
+    bodyweight: 'dumbbell', 
+    run: 'activity', 
+    cycle: 'bike' 
+  };
+  const labels = { 
+    muscle: 'Musculation', 
+    bodyweight: 'Musculation', 
+    run: 'Course à pied', 
+    cycle: 'Vélo' 
+  };
+  
   const d = new Date(s.date);
   const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-  const dur = s.duration ? formatDuration(s.duration) : '—';
+  const dur = s.duration ? formatDuration(s.duration) : (s.manualDuration ? s.manualDuration + ' min' : '—');
   const setCount = DB.getSetsForSession(s.id).length;
   const meta = (s.sport === 'muscle' || s.sport === 'bodyweight')
-    ? `${setCount} séries • ${dur}`
-    : `${s.distance ? s.distance + ' km • ' : ''}${dur}`;
-  return `<div class="history-item" onclick="showSessionDetail('${s.id}')">
-    <div class="history-sport-icon ${classes[s.sport]}">${icons[s.sport]}</div>
-    <div class="history-info">
-      <div class="history-name">${labels[s.sport]}</div>
-      <div class="history-meta">${dateStr} · ${meta}</div>
-    </div>
-    <div class="history-arrow"><i data-lucide="chevron-right" style="width:20px;color:var(--text-muted);"></i></div>
-  </div>`;
+    ? `<span style="color:var(--accent-light); font-weight:700;">${setCount}</span> séries`
+    : `<span style="color:var(--accent-light); font-weight:700;">${s.distance ? s.distance + ' km</span>' : ''}`;
+  
+  return `
+    <div class="history-item card card-glass" onclick="showSessionDetail('${s.id}')" style="margin-bottom:12px; display:flex; align-items:center; gap:16px; padding:12px 16px; border-radius:var(--radius-md); border-color:transparent; background:rgba(255,255,255,0.03);">
+      <div class="history-sport-icon" style="width:44px; height:44px; border-radius:12px; background:var(--bg-elevated); display:flex; align-items:center; justify-content:center; color:var(--accent-light); box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+        <i data-lucide="${icons[s.sport] || 'zap'}" style="width:20px; height:20px;"></i>
+      </div>
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <div style="font-weight:700; font-size:15px; color:var(--text-white);">${labels[s.sport] || 'Séance'}</div>
+          <div style="font-size:11px; font-weight:600; color:var(--text-muted);">${dateStr}</div>
+        </div>
+        <div style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:8px;">
+          ${meta} 
+          <span style="width:3px; height:3px; border-radius:50%; background:var(--text-muted);"></span>
+          <span>${dur}</span>
+        </div>
+      </div>
+      <div style="color:var(--text-muted);"><i data-lucide="chevron-right" style="width:18px;"></i></div>
+    </div>`;
 }
 
 // ─────────────────────────────────────────────

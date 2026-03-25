@@ -245,12 +245,104 @@ function getBMICategory(bmi) {
 }
 
 function calcIndiceDeFormeFor(sessions) {
-  // Based on sessions in last 14 days, target = 2 per week = 4 in 14 days
+  // Enhanced "Indice de Forme" (0-100)
+  // Factors: Frequency, Variety, Intensity, Consistency
   const now = new Date();
-  const cutoff = new Date(now - 14 * 24 * 3600 * 1000);
-  const recent = sessions.filter(s => s.finished && new Date(s.date) >= cutoff);
-  const score = Math.min(100, Math.round((recent.length / 4) * 100));
-  return score;
+  const twoWeeksAgo = new Date(now - 14 * 24 * 3600 * 1000);
+  const fourWeeksAgo = new Date(now - 28 * 24 * 3600 * 1000);
+  
+  const recentSessions = sessions.filter(s => s.finished && new Date(s.date) >= twoWeeksAgo);
+  if (recentSessions.length === 0) return 0;
+
+  // 1. Frequency (Target: 3 sessions/week = 6 in 14 days)
+  const freqScore = Math.min(100, (recentSessions.length / 6) * 100);
+
+  // 2. Variety (Distinct muscle groups targeted in last 14 days)
+  const muscleGroups = new Set();
+  const allExercises = DB.getExercises();
+  const allSets = DB.getSets();
+  
+  recentSessions.forEach(sess => {
+    const sessSets = allSets.filter(st => st.sessionId === sess.id);
+    sessSets.forEach(st => {
+      const ex = allExercises.find(e => e.id === st.exerciseId);
+      if (ex && ex.muscleGroups) ex.muscleGroups.forEach(mg => muscleGroups.add(mg));
+    });
+  });
+  // Reward for hitting at least 6 major groups (Chest, Back, Legs, Shoulders, Arms, Abs)
+  const varietyScore = Math.min(100, (muscleGroups.size / 6) * 100);
+
+  // 3. Intensity (Current 2-week volume vs 4-week average)
+  const recentSets = allSets.filter(st => {
+    const s = sessions.find(sess => sess.id === st.sessionId);
+    return s && new Date(s.date) >= twoWeeksAgo;
+  });
+  const olderSets = allSets.filter(st => {
+    const s = sessions.find(sess => sess.id === st.sessionId);
+    return s && new Date(s.date) >= fourWeeksAgo && new Date(s.date) < twoWeeksAgo;
+  });
+
+  const recentVol = recentSets.reduce((acc, st) => acc + (st.weight * st.reps), 0);
+  const olderVol = olderSets.reduce((acc, st) => acc + (st.weight * st.reps), 0) / 2; // adjust for 2-week comparison
+  
+  let intensityScore = 80; // default for baseline
+  if (olderVol > 0) {
+    const ratio = recentVol / olderVol;
+    intensityScore = Math.min(100, ratio * 80);
+  }
+
+  // 4. Consistency (Gap between sessions)
+  // Sort by date ascending
+  const dates = recentSessions.map(s => new Date(s.date)).sort((a,b) => a - b);
+  let gaps = [];
+  for (let i = 1; i < dates.length; i++) {
+    gaps.push((dates[i] - dates[i-1]) / (1000 * 3600 * 24));
+  }
+  const avgGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 14;
+  // Ideal gap: 1.5 to 3 days
+  let consistencyScore = 100;
+  if (avgGap > 4) consistencyScore = Math.max(0, 100 - (avgGap - 4) * 10);
+  if (avgGap < 1) consistencyScore = 80; // slightly penalize daily sessions without rest
+
+  return Math.round(freqScore * 0.4 + varietyScore * 0.2 + intensityScore * 0.2 + consistencyScore * 0.2);
+}
+
+function calcTotalCaloriesForSession(session, sets) {
+  // Enhanced Calorie Estimation using MET values
+  // Formula: MET * Weight (kg) * Duration (hours)
+  const profile = DB.getProfile();
+  const weight = profile.weight || 75; // fallback weight
+  const durationHr = (session.duration / 3600) || (session.manualDuration / 60) || 0;
+  
+  if (durationHr <= 0) return 0;
+
+  // Base MET values
+  const METS = {
+    'muscle': 5.0,
+    'bodyweight': 8.0,
+    'run': 10.0,
+    'cycle': 8.5
+  };
+  
+  let baseMET = METS[session.sport] || 6.0;
+
+  // Heart Rate Factor (if available)
+  // Advanced formula if HR is present
+  if (session.hr && session.hr > 0) {
+    const hr = Number(session.hr);
+    const age = Number(profile.age) || 30;
+    // Gender could be added to profile, default to average
+    // kcal/min = (0.6309 * HR + 0.1988 * Weight + 0.2017 * Age - 55.0969) / 4.184
+    const calPerMin = (0.6309 * hr + 0.1988 * weight + 0.2017 * age - 55.0969) / 4.184;
+    return Math.round(calPerMin * (durationHr * 60));
+  }
+
+  // Volume/Intensity adjustment for strength training
+  if (session.sport === 'muscle' && sets && sets.length > 0) {
+    baseMET += (sets.length / 5) * 0.5; // Every 5 sets increases intensity
+  }
+
+  return Math.round(baseMET * weight * durationHr);
 }
 
 function calcIndiceDePerformance(exerciseId) {
@@ -276,6 +368,45 @@ function calcIndiceDePerformance(exerciseId) {
 
   const pct = Math.round(((bestRecent - bestOld) / bestOld) * 100);
   return { value: pct, label: pct >= 0 ? `+${pct}%` : `${pct}%` };
+}
+
+function getMuscleRecovery() {
+  const sessions = DB.getSessions().filter(s => s.finished);
+  const allSets = DB.getSets();
+  const exercises = DB.getExercises();
+  const now = new Date();
+  
+  // Standard full recovery time: 48 hours
+  const RECOVERY_TIME_MS = 48 * 3600 * 1000;
+  
+  const recovery = {};
+  const majorGroups = ['Pectoraux', 'Dorsaux', 'Épaules', 'Quadriceps', 'Ischio-jambiers', 'Biceps', 'Triceps', 'Abdominaux', 'Fessiers'];
+  
+  majorGroups.forEach(g => recovery[g] = 100);
+
+  sessions.forEach(sess => {
+    const sessSets = allSets.filter(st => st.sessionId === sess.id);
+    const msSinceSess = now - new Date(sess.date);
+    
+    sessSets.forEach(st => {
+      const ex = exercises.find(e => e.id === st.exerciseId);
+      if (ex && ex.muscleGroups) {
+        ex.muscleGroups.forEach(mg => {
+          if (recovery[mg] !== undefined) {
+            // Decrease recovery based on session recency
+            // At sess.date, recovery drops to some value (e.g. 20%)
+            // Then it linearly increases to 100% over RECOVERY_TIME_MS
+            const currentRec = Math.min(100, (msSinceSess / RECOVERY_TIME_MS) * 100);
+            if (currentRec < recovery[mg]) {
+              recovery[mg] = Math.round(currentRec);
+            }
+          }
+        });
+      }
+    });
+  });
+
+  return recovery;
 }
 
 const DEFAULT_MACHINES = [
@@ -309,38 +440,38 @@ const DEFAULT_MACHINES = [
 ];
 
 const DEFAULT_EXERCISES = [
-  { id: 'e1', name: 'Squat', machineId: 'm1', category: 'Jambes' },
-  { id: 'e2', name: 'Développé couché', machineId: 'm2', category: 'Poitrine' },
-  { id: 'e3', name: 'Développé incliné', machineId: 'm3', category: 'Poitrine' },
-  { id: 'e4', name: 'Tractions', machineId: 'm4', category: 'Dos' },
-  { id: 'e5', name: 'Tirage verticale', machineId: 'm5', category: 'Dos' },
-  { id: 'e6', name: 'Rowing barre', machineId: 'm6', category: 'Dos' },
-  { id: 'e7', name: 'Développé militaire', machineId: 'm7', category: 'Épaules' },
-  { id: 'e8', name: 'Élévations latérales', machineId: 'm8', category: 'Épaules' },
-  { id: 'e9', name: 'Curl biceps', machineId: 'm9', category: 'Bras' },
-  { id: 'e10', name: 'Extension triceps', machineId: 'm10', category: 'Bras' },
-  { id: 'e11', name: 'Leg Press', machineId: 'm11', category: 'Jambes' },
-  { id: 'e12', name: 'Leg Curl', machineId: 'm12', category: 'Jambes' },
-  { id: 'e13', name: 'Mollets debout', machineId: 'm13', category: 'Jambes' },
-  { id: 'e14', name: 'Crunch machine', machineId: 'm14', category: 'Abdos' },
-  { id: 'e15', name: 'Cable fly', machineId: 'm15', category: 'Poitrine' },
-  { id: 'e16', name: 'Soulevé de terre', machineId: 'm16', category: 'Dos' },
-  { id: 'e17', name: 'Hip thrust', machineId: 'm16', category: 'Fessiers' },
-  { id: 'e18', name: 'Fentes', machineId: 'm16', category: 'Jambes' },
-  { id: 'e19', name: 'Pompes', machineId: 'm17', category: 'Poids du corps' },
-  { id: 'e20', name: 'Dips', machineId: 'm17', category: 'Poids du corps' },
-  { id: 'e21', name: 'Gainage (Planche)', machineId: 'm17', category: 'Poids du corps' },
-  { id: 'e22', name: 'Squat au pdc', machineId: 'm17', category: 'Poids du corps' },
-  { id: 'e23', name: 'Burpees', machineId: 'm17', category: 'Poids du corps' },
-  { id: 'e24', name: 'Machine Hip Thrust', machineId: 'm18', category: 'Fessiers' },
-  { id: 'e25', name: 'Abduction', machineId: 'm19', category: 'Fessiers' },
-  { id: 'e26', name: 'Adduction', machineId: 'm20', category: 'Jambes' },
-  { id: 'e27', name: 'Pec Fly', machineId: 'm21', category: 'Poitrine' },
-  { id: 'e28', name: 'Rear Delt Fly', machineId: 'm21', category: 'Épaules' },
-  { id: 'e29', name: 'Tirage Verticale Divergent', machineId: 'm22', category: 'Dos' },
-  { id: 'e30', name: 'Leg Extension', machineId: 'm23', category: 'Jambes' },
-  { id: 'e31', name: 'Machine Glute Kickback', machineId: 'm24', category: 'Fessiers' },
-  { id: 'e32', name: 'Hack Squat Machine', machineId: 'm25', category: 'Jambes' },
-  { id: 'e33', name: 'Chest Press Convergent', machineId: 'm26', category: 'Poitrine' },
-  { id: 'e34', name: 'Shoulder Press Convergent', machineId: 'm27', category: 'Épaules' },
+  { id: 'e1', name: 'Squat', machineId: 'm1', category: 'Jambes', muscleGroups: ['Quadriceps', 'Fessiers', 'Ischio-jambiers'] },
+  { id: 'e2', name: 'Développé couché', machineId: 'm2', category: 'Poitrine', muscleGroups: ['Pectoraux', 'Triceps', 'Épaules'] },
+  { id: 'e3', name: 'Développé incliné', machineId: 'm3', category: 'Poitrine', muscleGroups: ['Pectoraux hauts', 'Épaules', 'Triceps'] },
+  { id: 'e4', name: 'Tractions', machineId: 'm4', category: 'Dos', muscleGroups: ['Dorsaux', 'Biceps', 'Avant-bras'] },
+  { id: 'e5', name: 'Tirage verticale', machineId: 'm5', category: 'Dos', muscleGroups: ['Dorsaux', 'Biceps'] },
+  { id: 'e6', name: 'Rowing barre', machineId: 'm6', category: 'Dos', muscleGroups: ['Dorsaux', 'Trapèzes', 'Biceps', 'Lombaires'] },
+  { id: 'e7', name: 'Développé militaire', machineId: 'm7', category: 'Épaules', muscleGroups: ['Épaules', 'Triceps', 'Haut du dos'] },
+  { id: 'e8', name: 'Élévations latérales', machineId: 'm8', category: 'Épaules', muscleGroups: ['Deltoïdes latéraux'] },
+  { id: 'e9', name: 'Curl biceps', machineId: 'm9', category: 'Bras', muscleGroups: ['Biceps', 'Avant-bras'] },
+  { id: 'e10', name: 'Extension triceps', machineId: 'm10', category: 'Bras', muscleGroups: ['Triceps'] },
+  { id: 'e11', name: 'Leg Press', machineId: 'm11', category: 'Jambes', muscleGroups: ['Quadriceps', 'Fessiers'] },
+  { id: 'e12', name: 'Leg Curl', machineId: 'm12', category: 'Jambes', muscleGroups: ['Ischio-jambiers'] },
+  { id: 'e13', name: 'Mollets debout', machineId: 'm13', category: 'Jambes', muscleGroups: ['Mollets'] },
+  { id: 'e14', name: 'Crunch machine', machineId: 'm14', category: 'Abdos', muscleGroups: ['Abdominaux'] },
+  { id: 'e15', name: 'Cable fly', machineId: 'm15', category: 'Poitrine', muscleGroups: ['Pectoraux'] },
+  { id: 'e16', name: 'Soulevé de terre', machineId: 'm16', category: 'Dos', muscleGroups: ['Lombaires', 'Ischio-jambiers', 'Fessiers', 'Trapèzes'] },
+  { id: 'e17', name: 'Hip thrust', machineId: 'm16', category: 'Fessiers', muscleGroups: ['Fessiers', 'Ischio-jambiers'] },
+  { id: 'e18', name: 'Fentes', machineId: 'm16', category: 'Jambes', muscleGroups: ['Quadriceps', 'Fessiers', 'Adducteurs'] },
+  { id: 'e19', name: 'Pompes', machineId: 'm17', category: 'Poids du corps', muscleGroups: ['Pectoraux', 'Triceps', 'Épaules'] },
+  { id: 'e20', name: 'Dips', machineId: 'm17', category: 'Poids du corps', muscleGroups: ['Pectoraux', 'Triceps', 'Épaules'] },
+  { id: 'e21', name: 'Gainage (Planche)', machineId: 'm17', category: 'Poids du corps', muscleGroups: ['Abdominaux', 'Lombaires', 'Épaules'] },
+  { id: 'e22', name: 'Squat au pdc', machineId: 'm17', category: 'Poids du corps', muscleGroups: ['Quadriceps', 'Fessiers'] },
+  { id: 'e23', name: 'Burpees', machineId: 'm17', category: 'Poids du corps', muscleGroups: ['Global', 'Cardio', 'Jambes', 'Pectoraux'] },
+  { id: 'e24', name: 'Machine Hip Thrust', machineId: 'm18', category: 'Fessiers', muscleGroups: ['Fessiers'] },
+  { id: 'e25', name: 'Abduction', machineId: 'm19', category: 'Fessiers', muscleGroups: ['Fessiers', 'TFL'] },
+  { id: 'e26', name: 'Adduction', machineId: 'm20', category: 'Jambes', muscleGroups: ['Adducteurs'] },
+  { id: 'e27', name: 'Pec Fly', machineId: 'm21', category: 'Poitrine', muscleGroups: ['Pectoraux'] },
+  { id: 'e28', name: 'Rear Delt Fly', machineId: 'm21', category: 'Épaules', muscleGroups: ['Deltoïdes postérieurs', 'Trapèzes'] },
+  { id: 'e29', name: 'Tirage Verticale Divergent', machineId: 'm22', category: 'Dos', muscleGroups: ['Dorsaux', 'Biceps'] },
+  { id: 'e30', name: 'Leg Extension', machineId: 'm23', category: 'Jambes', muscleGroups: ['Quadriceps'] },
+  { id: 'e31', name: 'Machine Glute Kickback', machineId: 'm24', category: 'Fessiers', muscleGroups: ['Fessiers'] },
+  { id: 'e32', name: 'Hack Squat Machine', machineId: 'm25', category: 'Jambes', muscleGroups: ['Quadriceps', 'Fessiers'] },
+  { id: 'e33', name: 'Chest Press Convergent', machineId: 'm26', category: 'Poitrine', muscleGroups: ['Pectoraux', 'Triceps'] },
+  { id: 'e34', name: 'Shoulder Press Convergent', machineId: 'm27', category: 'Épaules', muscleGroups: ['Épaules', 'Triceps'] },
 ];

@@ -176,6 +176,16 @@
         <div class="kpi-trend up" id="kpi-streak-desc" style="color:var(--accent-light);">consécutifs</div>
       </div>
       <div class="kpi-card">
+        <div class="kpi-label">Calories (mois)</div>
+        <div class="kpi-value"><span id="kpi-calories">0</span><span class="kpi-unit"> kcal</span></div>
+        <div class="kpi-trend neutral">Estimation</div>
+      </div>
+      <div class="kpi-card highlight">
+        <div class="kpi-label">Objectif Hebdo</div>
+        <div class="kpi-value"><span id="kpi-weekly-goal">0/4</span></div>
+        <div class="kpi-trend neutral" id="kpi-weekly-trend">Séances</div>
+      </div>
+      <div class="kpi-card">
         <div class="kpi-label">Poids actuel</div>
         <div class="kpi-value"><span id="kpi-weight">—</span><span class="kpi-unit"> kg</span></div>
         <div class="kpi-trend neutral" id="kpi-weight-trend">—</div>
@@ -185,37 +195,32 @@
     <!-- Targeted Muscles -->
     <div class="section">
       <div class="section-header">
-        <div class="section-title">Muscles ciblés (7 jours)</div>
+        <div class="section-title">Sollicitation Musculaire</div>
       </div>
-      <div class="card card-glass">
-        <div id="dashboard-muscle-map">
-          <div class="empty-state" style="padding:var(--space-sm); text-align:center;">
-             <div class="empty-desc" style="font-size:12px;">Aucune donnée musculaire récente.</div>
-          </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-sm);">
+        <div class="card card-glass">
+            <div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:8px; text-transform:uppercase;">Volume (7j)</div>
+            <div id="dashboard-muscle-map"></div>
+        </div>
+        <div class="card card-glass" style="display:flex; align-items:center; justify-content:center; padding:var(--space-sm);">
+            <canvas id="chart-muscle-radar" style="max-height:140px;"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Muscle Recovery -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">Récupération Musculaire</div>
+      </div>
+      <div class="card" id="dashboard-recovery-list" style="padding:var(--space-md);">
+        <div class="empty-state" style="padding:var(--space-sm); text-align:center;">
+          <div class="empty-desc">Analysez votre récupération…</div>
         </div>
       </div>
     </div>
 
     <!-- Quick Start -->
-    <div class="section">
-      <div class="section-header">
-        <div class="section-title">Démarrer une séance</div>
-      </div>
-      <div class="sport-grid">
-        <div class="sport-card" onclick="startQuickSession('muscle')" id="qs-muscle">
-          <div class="sport-icon"><i data-lucide="dumbbell"></i></div>
-          <div class="sport-name">Musculation</div>
-        </div>
-        <div class="sport-card" onclick="startQuickSession('run')" id="qs-run">
-          <div class="sport-icon"><i data-lucide="activity"></i></div>
-          <div class="sport-name">Course</div>
-        </div>
-        <div class="sport-card" onclick="startQuickSession('cycle')" id="qs-cycle">
-          <div class="sport-icon"><i data-lucide="bike"></i></div>
-          <div class="sport-name">Vélo</div>
-        </div>
-      </div>
-    </div>
 
     <!-- Suggestions -->
     <div class="section">
