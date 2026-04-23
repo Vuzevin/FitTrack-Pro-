@@ -114,6 +114,8 @@ function toDBObj(obj) {
     machineId: 'machine_id',
     muscleGroups: 'muscle_groups',
     restDuration: 'rest_duration',
+    weeklyGoal: 'weekly_goal',
+    hr: 'heart_rate',
     heartRate: 'heart_rate'
   };
   const res = {};
@@ -131,7 +133,8 @@ function toJSObj(obj) {
     machine_id: 'machineId',
     muscle_groups: 'muscleGroups',
     rest_duration: 'restDuration',
-    heart_rate: 'heartRate'
+    weekly_goal: 'weeklyGoal',
+    heart_rate: 'hr'
   };
   const res = {};
   for (let k in obj) {

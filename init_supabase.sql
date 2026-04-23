@@ -12,10 +12,10 @@ CREATE TABLE public.profiles (
     id text PRIMARY KEY,
     user_id uuid REFERENCES auth.users NOT NULL,
     name text,
-    age integer,
     height real,
     goal text,
-    rest_duration integer
+    rest_duration integer,
+    weekly_goal integer
 );
 
 -- Table sessions
@@ -62,13 +62,13 @@ CREATE TABLE public.machines (
     category text
 );
 
--- Table exercises
 CREATE TABLE public.exercises (
     id text PRIMARY KEY,
     user_id uuid REFERENCES auth.users NOT NULL,
     name text,
     machine_id text,
-    category text
+    category text,
+    muscle_groups text[]
 );
 
 -- =======================================
