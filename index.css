@@ -822,12 +822,10 @@ body::before {
 
 .sheet-handle {
   width: 40px;
-.muscle-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%);
-  border-radius: var(--radius-full);
-  transition: width 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  box-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
+  height: 4px;
+  background: var(--border-active);
+  border-radius: 2px;
+  margin: 0 auto var(--space-md);
 }
 
 /* Animations */
@@ -879,7 +877,8 @@ body::before {
   border-radius: 3px;
   transition: width 1.5s var(--ease), background 0.5s ease;
 }
-  margin: 0 var(--space-md) var(--space-md);
+
+.indice-card {
   background: linear-gradient(135deg, rgba(20, 20, 30, 0.6) 0%, rgba(139, 92, 246, 0.15) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
