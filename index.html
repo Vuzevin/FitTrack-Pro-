@@ -180,7 +180,17 @@
         <div class="kpi-value"><span id="kpi-calories">0</span><span class="kpi-unit"> kcal</span></div>
         <div class="kpi-trend neutral">Estimation</div>
       </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Progression Vol.</div>
+        <div class="kpi-value"><span id="kpi-progression">—</span><span class="kpi-unit"> %</span></div>
+        <div class="kpi-trend neutral" id="kpi-progression-trend">vs sem. dernière</div>
+      </div>
       <div class="kpi-card highlight">
+        <div class="kpi-label">Records (7j)</div>
+        <div class="kpi-value"><span id="kpi-records-count">0</span></div>
+        <div class="kpi-trend neutral" id="kpi-records-trend">Nouveaux PRs</div>
+      </div>
+      <div class="kpi-card">
         <div class="kpi-label">Objectif Hebdo</div>
         <div class="kpi-value"><span id="kpi-weekly-goal">0/4</span></div>
         <div class="kpi-trend neutral" id="kpi-weekly-trend">Séances</div>
@@ -289,6 +299,10 @@
             <div class="sport-icon"><i data-lucide="dumbbell"></i></div>
             <div class="sport-name">Musculation</div>
           </div>
+          <div class="sport-card" onclick="selectSport('bodyweight')" id="sp-bodyweight">
+            <div class="sport-icon"><i data-lucide="person-standing"></i></div>
+            <div class="sport-name">Poids du corps</div>
+          </div>
           <div class="sport-card" onclick="selectSport('run')" id="sp-run">
             <div class="sport-icon"><i data-lucide="activity"></i></div>
             <div class="sport-name">Course à pied</div>
@@ -307,8 +321,10 @@
             <div>
               <div style="font-weight:700;color:var(--text-white);">Séance en cours</div>
               <div style="font-size:13px;color:var(--text-secondary);" id="active-session-info">—</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-ghost btn-sm" onclick="cancelSession()" style="color:var(--danger); padding:4px 8px;"><i data-lucide="trash-2" style="width:16px;"></i></button>
+              <button class="btn btn-primary btn-sm" onclick="resumeActiveSession()">Reprendre →</button>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="resumeActiveSession()">Reprendre →</button>
           </div>
         </div>
       </div>
@@ -323,6 +339,7 @@
             <div class="page-subtitle" id="session-muscle-timer">00:00</div>
           </div>
           <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="cancelSession()" style="color:var(--danger); border-color:rgba(239, 68, 68, 0.2);"><i data-lucide="trash-2" style="width:16px;"></i></button>
             <button class="btn btn-secondary btn-sm" onclick="finishSession()" style="box-shadow: 0 0 10px rgba(124, 58, 237, 0.2); border-color: var(--accent-light); color: var(--accent-light);">Terminer ✓</button>
           </div>
         </div>
@@ -344,7 +361,8 @@
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
             <div>
               <div style="font-size:13px;color:var(--text-secondary);font-weight:600;">Exercice sélectionné (Live)</div>
-              <div style="font-size:16px;font-weight:800;color:var(--text-white);" id="log-exercise-name">—</div>
+              <div style="font-size:18px;font-weight:900;color:var(--text-white);letter-spacing:-0.5px;" id="log-exercise-name">—</div>
+              <div id="log-muscle-groups" style="font-size:10px; color:var(--text-muted); margin-top:4px; display:flex; gap:6px; flex-wrap:wrap; text-transform:uppercase; font-weight:700;"></div>
             </div>
             <div id="log-pr-badge" class="badge badge-pr hidden">🏆 PR</div>
           </div>
@@ -374,20 +392,14 @@
             </div>
           </div>
           
-          <div id="leste-container" class="hidden" style="margin-bottom:12px;">
-            <div class="form-field">
-              <label class="label">Leste ajouté (kg) - Poids du corps pris en compte</label>
-              <div class="stepper">
-                <button class="stepper-btn" onclick="stepperChange('leste',-1)">−</button>
-                <div class="stepper-value" id="stepper-leste" contenteditable="true" inputmode="decimal">0</div>
-                <button class="stepper-btn" onclick="stepperChange('leste',1)">+</button>
-              </div>
-            </div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn btn-secondary" onclick="repeatLastSet()" id="btn-repeat-set" style="flex:1; border-radius:var(--radius-md); font-size:13px; padding:12px;">
+              <i data-lucide="copy" style="width:16px; margin-right:4px; vertical-align:middle;"></i> Répéter
+            </button>
+            <button class="btn btn-success btn-lg" onclick="logSet()" id="log-set-btn" style="flex:2; border-radius:var(--radius-md);">
+              ✓ Valider la série
+            </button>
           </div>
-
-          <button class="btn btn-success btn-full btn-lg" onclick="logSet()" id="log-set-btn">
-            ✓ Valider la série
-          </button>
         </div>
       </div>
 
@@ -424,7 +436,10 @@
             <div class="page-title" id="cardio-title" style="font-size:20px;">🏃 Course</div>
             <div class="page-subtitle">Séance cardio</div>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="finishCardioSession()">Terminer ✓</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="cancelSession()" style="color:var(--danger); border-color:rgba(239, 68, 68, 0.2);"><i data-lucide="trash-2" style="width:16px;"></i></button>
+            <button class="btn btn-secondary btn-sm" onclick="finishCardioSession()" style="box-shadow: 0 0 10px rgba(52, 211, 153, 0.2); border-color: var(--success); color: var(--success);">Terminer ✓</button>
+          </div>
         </div>
       </div>
 
@@ -585,6 +600,14 @@
           <div class="chart-container">
             <canvas id="chart-volume"></canvas>
           </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><div class="section-title">Force Relative (PR/Poids)</div></div>
+        <div class="card card-glass" style="text-align:center; padding:var(--space-lg);">
+          <div style="font-size:48px; font-weight:900; color:var(--accent-light);" id="stats-relative-strength">—</div>
+          <div style="font-size:13px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:1px;">Ratio de Puissance</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:8px;" id="stats-relative-desc">Votre 1RM divisé par votre poids actuel</div>
         </div>
       </div>
       <!-- Best lifts table -->

@@ -212,6 +212,20 @@ function renderDashboard() {
     }
   }
   document.getElementById('kpi-streak').textContent = streak;
+  
+  // New KPIs
+  const progression = calcWeeklyVolumeProgression();
+  const prCount = getRecentPRsCount();
+  const progEl = document.getElementById('kpi-progression');
+  if (progEl) progEl.textContent = (progression > 0 ? '+' : '') + progression;
+  const progTrend = document.getElementById('kpi-progression-trend');
+  if (progTrend) {
+    progTrend.className = 'kpi-trend ' + (progression > 0 ? 'up' : progression < 0 ? 'down' : 'neutral');
+  }
+  const prEl = document.getElementById('kpi-records-count');
+  if (prEl) prEl.textContent = prCount;
+  const prTrend = document.getElementById('kpi-records-trend');
+  if (prTrend) prTrend.className = 'kpi-trend ' + (prCount > 0 ? 'up' : 'neutral');
 
   // Weight
   const metrics = DB.getMetrics();
@@ -453,13 +467,13 @@ function renderExerciseSuggestions(allSets, sessions) {
 function sessionHistoryCard(s) {
   const icons = { 
     muscle: 'dumbbell', 
-    bodyweight: 'dumbbell', 
+    bodyweight: 'person-standing', 
     run: 'activity', 
     cycle: 'bike' 
   };
   const labels = { 
     muscle: 'Musculation', 
-    bodyweight: 'Musculation', 
+    bodyweight: 'Poids du corps', 
     run: 'Course à pied', 
     cycle: 'Vélo' 
   };
@@ -511,7 +525,7 @@ function renderSessionView() {
       banner.classList.remove('hidden');
       const labels = {
         muscle: '<i data-lucide="dumbbell" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Musculation',
-        bodyweight: '<i data-lucide="dumbbell" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Musculation',
+        bodyweight: '<i data-lucide="person-standing" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Poids du corps',
         run: '<i data-lucide="activity" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Course',
         cycle: '<i data-lucide="bike" style="width:16px;margin-bottom:-2px;margin-right:4px;"></i> Vélo'
       };
@@ -589,8 +603,10 @@ function selectSport(sport) {
 
   if (sport === 'muscle' || sport === 'bodyweight') {
     document.getElementById('session-muscle').classList.remove('hidden');
-    document.title = '🏋️ Musculation';
-    document.querySelector('#session-muscle .page-title').innerHTML = '<i data-lucide="dumbbell" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Musculation';
+    document.title = sport === 'muscle' ? '🏋️ Musculation' : '💪 Poids du corps';
+    const icon = sport === 'muscle' ? 'dumbbell' : 'person-standing';
+    const label = sport === 'muscle' ? 'Musculation' : 'Poids du corps';
+    document.querySelector('#session-muscle .page-title').innerHTML = `<i data-lucide="${icon}" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> ${label}`;
     document.getElementById('session-exercises-list').innerHTML = '';
     document.getElementById('log-set-panel').classList.add('hidden');
     refreshIcons();
@@ -634,6 +650,34 @@ function selectSport(sport) {
   }
 }
 
+function cancelSession() {
+  if (!activeSessionId) return;
+  if (confirm('Voulez-vous vraiment annuler cette séance ? Les données non validées seront perdues.')) {
+    // Delete session and its sets
+    const sets = DB.getSetsForSession(activeSessionId);
+    sets.forEach(s => {
+      DB.deleteSet(s.id);
+    });
+    DB.deleteSession(activeSessionId);
+    
+    // Clear state
+    activeSessionId = null;
+    activeSessionSport = null;
+    activeExerciseId = null;
+    clearInterval(sessionTimerInterval);
+    clearInterval(cardioTimerInterval);
+    
+    // Reset UI and navigate back
+    document.getElementById('active-session-banner').classList.add('hidden');
+    document.getElementById('session-selector').style.display = 'block';
+    document.getElementById('session-muscle').classList.add('hidden');
+    document.getElementById('session-cardio').classList.add('hidden');
+    
+    navigate('dashboard');
+    showToast('Séance annulée', 'info');
+  }
+}
+
 function resumeActiveSession() {
   if (!activeSessionId) return;
   const sess = DB.getSessionById(activeSessionId);
@@ -656,7 +700,9 @@ function resumeActiveSession() {
   document.getElementById('session-cardio').classList.add('hidden');
   if (sess.sport === 'muscle' || sess.sport === 'bodyweight') {
     document.getElementById('session-muscle').classList.remove('hidden');
-    document.querySelector('#session-muscle .page-title').innerHTML = '<i data-lucide="dumbbell" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> Musculation';
+    const icon = sess.sport === 'muscle' ? 'dumbbell' : 'person-standing';
+    const label = sess.sport === 'muscle' ? 'Musculation' : 'Poids du corps';
+    document.querySelector('#session-muscle .page-title').innerHTML = `<i data-lucide="${icon}" style="width:24px;margin-bottom:-4px;margin-right:8px;"></i> ${label}`;
     renderExerciseBlocks();
     refreshIcons();
   } else {
@@ -842,15 +888,10 @@ function showLogSetPanel(exerciseId) {
   if (pastTablePanel) pastTablePanel.classList.add('hidden');
   document.getElementById('log-exercise-name').textContent = name;
 
-  const lesteContainer = document.getElementById('leste-container');
-  const labelWeight = document.getElementById('label-weight');
   const isBw = ex && ex.category === 'Poids du corps';
-  if (isBw) {
-    if (lesteContainer) lesteContainer.classList.remove('hidden');
-    if (labelWeight) labelWeight.parentElement.style.display = 'none';
-  } else {
-    if (lesteContainer) lesteContainer.classList.add('hidden');
-    if (labelWeight) labelWeight.parentElement.style.display = 'block';
+  const labelWeight = document.getElementById('label-weight');
+  if (labelWeight) {
+    labelWeight.textContent = isBw ? 'Poids Total (kg)' : 'Poids (kg)';
   }
 
   // Show PR
@@ -864,15 +905,19 @@ function showLogSetPanel(exerciseId) {
     prInfo.classList.add('hidden');
     prBadge.classList.add('hidden');
   }
-  // Pre-fill with last set values
+
+  // Pre-fill with last set values or bodyweight
   const allSets = DB.getSetsForExercise(exerciseId);
+  const metrics = DB.getMetrics();
+  const userWeight = metrics.length ? metrics[metrics.length - 1].weight : 70;
+
   if (allSets.length) {
     const last = allSets[allSets.length - 1];
     document.getElementById('stepper-reps').textContent = last.reps;
     document.getElementById('stepper-weight').textContent = last.weight;
   } else {
     document.getElementById('stepper-reps').textContent = '10';
-    document.getElementById('stepper-weight').textContent = '20';
+    document.getElementById('stepper-weight').textContent = isBw ? Math.round(userWeight) : '20';
   }
 }
 
@@ -1014,16 +1059,7 @@ function logSet() {
   const repsText = document.getElementById('stepper-reps').textContent || '';
   const weightText = document.getElementById('stepper-weight').textContent || '';
   const reps = parseFloat(repsText.replace(',', '.')) || 0;
-  let weight = parseFloat(weightText.replace(',', '.')) || 0;
-  
-  const ex = DB.getExerciseById(activeExerciseId);
-  const isBw = ex && ex.category === 'Poids du corps';
-  if (isBw) {
-    const leste = parseFloat(document.getElementById('stepper-leste').textContent) || 0;
-    const metrics = DB.getMetrics();
-    const userWeight = metrics.length ? metrics[metrics.length - 1].weight : 70;
-    weight = parseFloat((userWeight + leste).toFixed(1));
-  }
+  const weight = parseFloat(weightText.replace(',', '.')) || 0;
   
   if (reps <= 0) { showToast('Entrez un nombre de répétitions', 'warning'); return; }
 
@@ -1040,6 +1076,16 @@ function logSet() {
   // Start rest timer
   const settings = DB.getSettings();
   startRestTimer(settings.restDuration, '');
+}
+
+function repeatLastSet() {
+  const repsText = document.getElementById('stepper-reps').textContent;
+  const weightText = document.getElementById('stepper-weight').textContent;
+  if (!repsText || repsText === '0') {
+    showToast('Aucune valeur à répéter', 'warning');
+    return;
+  }
+  logSet();
 }
 
 // ─────────────────────────────────────────────
@@ -1517,6 +1563,22 @@ function renderMuscleStats() {
 
   drawLineChart('chart-orm', labels, orms, '1RM estimé (kg)', '#a78bfa');
   drawBarChart('chart-volume', labels, vols, 'Volume (kg)', 'rgba(124,58,237,0.7)');
+
+  // Force Relative
+  const pr = DB.getPRForExercise(exId);
+  const metrics = DB.getMetrics();
+  const relStrengthEl = document.getElementById('stats-relative-strength');
+  if (pr && metrics.length && relStrengthEl) {
+    const lastWeight = metrics[metrics.length - 1].weight;
+    const ratio = (pr.orm / lastWeight).toFixed(2);
+    relStrengthEl.textContent = ratio;
+    const descEl = document.getElementById('stats-relative-desc');
+    let level = 'Débutant';
+    if (ratio > 2.0) level = 'Élite';
+    else if (ratio > 1.5) level = 'Avancé';
+    else if (ratio > 1.0) level = 'Intermédiaire';
+    descEl.textContent = `Niveau : ${level} (${ratio}x votre poids)`;
+  }
 }
 
 function renderCardioStats() {
@@ -1968,5 +2030,5 @@ window.addEventListener('offline', () => {
 });
 window.addEventListener('online', () => {
   showToast('Connexion rétablie !', 'success');
-  if (typeof syncFromSupabase === 'function') syncFromSupabase();
+  if (typeof syncFromSupabase === 'function') syncFromSupabase(false);
 });

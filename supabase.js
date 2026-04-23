@@ -145,12 +145,17 @@ function toJSObj(obj) {
 
 // --- SYNC ENGINE ---
 // Pull data from Supabase into LocalStorage to keep app.js synchronous
-async function syncFromSupabase() {
+async function syncFromSupabase(showSpinner = true) {
   if (!currentUser) return;
   
   const spinner = document.getElementById('sync-overlay');
-  if (spinner) spinner.style.display = 'flex';
-  showToast('Synchronisation...', 'info');
+  if (spinner && showSpinner) {
+    spinner.style.display = 'flex';
+  } else if (!showSpinner) {
+    showToast('Synchronisation en arrière-plan...', 'info');
+  } else {
+    showToast('Synchronisation...', 'info');
+  }
   
   try {
     const [
@@ -187,12 +192,12 @@ async function syncFromSupabase() {
     
     await uploadUnsyncedData({ profile, sessions, sets, metrics, machines, exercises });
 
-    showToast('Données synchronisées', 'success');
+    if (showSpinner) showToast('Données synchronisées', 'success');
   } catch(e) {
     console.error("Erreur de synchro:", e);
-    showToast('Erreur de synchronisation cloud', 'danger');
+    if (showSpinner) showToast('Erreur de synchronisation cloud', 'danger');
   } finally {
-    if (spinner) spinner.style.display = 'none';
+    if (spinner && showSpinner) spinner.style.display = 'none';
   }
 }
 

@@ -409,6 +409,55 @@ function getMuscleRecovery() {
   return recovery;
 }
 
+function calcWeeklyVolumeProgression() {
+  const sessions = DB.getSessions().filter(s => s.finished);
+  const allSets = DB.getSets();
+  const now = new Date();
+  
+  const oneWeekAgo = new Date(now - 7 * 24 * 3600 * 1000);
+  const twoWeeksAgo = new Date(now - 14 * 24 * 3600 * 1000);
+  
+  const thisWeekSets = allSets.filter(st => {
+    const s = sessions.find(sess => sess.id === st.sessionId);
+    return s && new Date(s.date) >= oneWeekAgo;
+  });
+  
+  const lastWeekSets = allSets.filter(st => {
+    const s = sessions.find(sess => sess.id === st.sessionId);
+    return s && new Date(s.date) >= twoWeeksAgo && new Date(s.date) < oneWeekAgo;
+  });
+  
+  const thisWeekVol = thisWeekSets.reduce((acc, st) => acc + (st.weight * st.reps), 0);
+  const lastWeekVol = lastWeekSets.reduce((acc, st) => acc + (st.weight * st.reps), 0);
+  
+  if (lastWeekVol === 0) return thisWeekVol > 0 ? 100 : 0;
+  return Math.round(((thisWeekVol - lastWeekVol) / lastWeekVol) * 100);
+}
+
+function getRecentPRsCount() {
+  const now = new Date();
+  const oneWeekAgo = new Date(now - 7 * 24 * 3600 * 1000);
+  const allSets = DB.getSets();
+  const exercises = DB.getExercises();
+  
+  let count = 0;
+  exercises.forEach(ex => {
+    const exSets = allSets.filter(s => s.exerciseId === ex.id);
+    if (!exSets.length) return;
+    
+    let best = 0;
+    exSets.forEach(s => {
+      const orm = calc1RM(s.weight, s.reps);
+      if (orm > best) best = orm;
+    });
+    
+    if (exSets.some(s => calc1RM(s.weight, s.reps) === best && new Date(s.timestamp) >= oneWeekAgo)) {
+      count++;
+    }
+  });
+  return count;
+}
+
 const DEFAULT_MACHINES = [
   { id: 'm1', name: 'Squat / Rack', muscleGroups: ['Quadriceps', 'Fessiers', 'Ischio-jambiers'], category: 'Jambes' },
   { id: 'm2', name: 'Développé couché (Banc plat)', muscleGroups: ['Pectoraux', 'Triceps', 'Épaules'], category: 'Poitrine' },
